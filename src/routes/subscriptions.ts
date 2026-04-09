@@ -62,6 +62,30 @@ export function subscriptionRoutes(db: StrimulatorDB, eventService?: EventServic
       return sub;
     })
 
+    // POST /v1/subscriptions/:id — update
+    .post("/:id", async ({ params: { id }, request }) => {
+      const rawBody = await request.text();
+      const body = parseStripeBody(rawBody);
+
+      if (Array.isArray(body.items)) {
+        body.items = body.items.map((item: any) => ({
+          ...item,
+          quantity: item.quantity !== undefined ? parseInt(item.quantity, 10) : undefined,
+        }));
+      }
+
+      if (body.cancel_at_period_end !== undefined) {
+        body.cancel_at_period_end = body.cancel_at_period_end === "true" || body.cancel_at_period_end === true;
+      }
+
+      if (body.trial_end !== undefined && body.trial_end !== "now") {
+        body.trial_end = parseInt(body.trial_end as string, 10);
+      }
+
+      const updated = service.update(id, body as any, eventService);
+      return updated;
+    })
+
     // GET /v1/subscriptions — list
     .get("/", ({ query }) => {
       const q = query as Record<string, string | undefined>;
@@ -93,7 +117,7 @@ export function subscriptionRoutes(db: StrimulatorDB, eventService?: EventServic
 
     // DELETE /v1/subscriptions/:id — cancel
     .delete("/:id", ({ params: { id } }) => {
-      const canceled = service.cancel(id);
+      const canceled = service.cancel(id, eventService);
       eventService?.emit("customer.subscription.deleted", canceled as unknown as Record<string, unknown>);
       return canceled;
     });

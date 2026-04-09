@@ -14,10 +14,7 @@ import { InvoiceService } from "../services/invoices";
 import { PriceService } from "../services/prices";
 import { StripeError } from "../errors";
 
-// In-memory flag: set to an error code to make the next PaymentIntent confirm fail
-export const actionFlags = {
-  failNextPayment: null as string | null,
-};
+import { actionFlags } from "../lib/action-flags";
 
 const RESOURCE_TYPES: Record<string, string> = {
   customers: "customers",
@@ -141,6 +138,7 @@ export function dashboardApi(db: StrimulatorDB) {
     })
 
     .get("/stream", () => {
+      let unsubscribeRequest: (() => void) | undefined;
       const stream = new ReadableStream({
         start(controller) {
           const encoder = new TextEncoder();
@@ -154,18 +152,12 @@ export function dashboardApi(db: StrimulatorDB) {
           sendEvent({ type: "connected" });
 
           // Subscribe to globalBus for live updates
-          const unsubscribeRequest = globalBus.on("request", (entry) => {
+          unsubscribeRequest = globalBus.on("request", (entry) => {
             sendEvent({ type: "request", payload: entry });
           });
-
-          // Cleanup when stream closes
-          // Note: ReadableStream cancel is called when consumer disconnects
-          return () => {
-            unsubscribeRequest();
-          };
         },
         cancel() {
-          // Cleanup handled by return value of start
+          unsubscribeRequest?.();
         },
       });
 

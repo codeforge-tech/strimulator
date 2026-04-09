@@ -6,10 +6,11 @@ import { generateId } from "../lib/id-generator";
 import { now } from "../lib/timestamps";
 import { buildListResponse, type ListParams, type ListResponse } from "../lib/pagination";
 import { parseSearchQuery, matchesCondition, buildSearchResult, type SearchResult } from "../lib/search";
+import { randomBytes } from "crypto";
 import { resourceNotFoundError, invalidRequestError, stateTransitionError, cardError } from "../errors";
 import type { ChargeService } from "./charges";
 import type { PaymentMethodService } from "./payment-methods";
-import { actionFlags } from "../dashboard/api";
+import { actionFlags } from "../lib/action-flags";
 
 export interface CreatePaymentIntentParams {
   amount: number;
@@ -52,12 +53,7 @@ type PaymentIntentStatus =
 const TERMINAL_STATES: PaymentIntentStatus[] = ["succeeded", "canceled"];
 
 function generateClientSecret(id: string): string {
-  // Generate 16 random chars
-  const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  let secret = "";
-  for (let i = 0; i < 16; i++) {
-    secret += chars[Math.floor(Math.random() * chars.length)];
-  }
+  const secret = randomBytes(12).toString("base64url");
   return `${id}_secret_${secret}`;
 }
 
@@ -74,6 +70,7 @@ function buildPaymentIntentShape(
     status: PaymentIntentStatus;
     metadata?: Record<string, string>;
     latest_charge?: string | null;
+    next_action?: Stripe.PaymentIntent.NextAction | null;
     last_payment_error?: Stripe.PaymentIntent["last_payment_error"] | null;
     amount_received?: number;
     canceled_at?: number | null;
@@ -100,7 +97,7 @@ function buildPaymentIntentShape(
     latest_charge: params.latest_charge ?? null,
     livemode: false,
     metadata: params.metadata ?? {},
-    next_action: null,
+    next_action: params.next_action ?? null,
     on_behalf_of: null,
     payment_method: params.payment_method ?? null,
     payment_method_options: {},
@@ -119,6 +116,7 @@ function buildPaymentIntentShape(
 
 interface SimulationResult {
   success: boolean;
+  requiresAction?: boolean;
   failureCode?: string;
   failureMessage?: string;
   declineCode?: string;
@@ -152,6 +150,9 @@ export class PaymentIntentService {
         failureMessage: "Your card was declined.",
         declineCode: "generic_decline",
       };
+    }
+    if (last4 === "3220") {
+      return { success: true, requiresAction: true };
     }
     return { success: true };
   }
@@ -256,9 +257,50 @@ export class PaymentIntentService {
     // Validate state
     if (
       existing.status !== "requires_confirmation" &&
-      existing.status !== "requires_payment_method"
+      existing.status !== "requires_payment_method" &&
+      existing.status !== "requires_action"
     ) {
       throw stateTransitionError("payment_intent", id, existing.status, "confirm");
+    }
+
+    // If re-confirming after 3DS, skip simulation — go straight to charge creation
+    if (existing.status === "requires_action") {
+      const pmId = existing.payment_method as string;
+      const captureMethod = existing.capture_method as "automatic" | "manual";
+
+      const charge = this.chargeService.create({
+        amount: existing.amount,
+        currency: existing.currency,
+        customerId: existing.customer as string | null,
+        paymentIntentId: id,
+        paymentMethodId: pmId,
+        status: "succeeded",
+      });
+
+      const newStatus: PaymentIntentStatus = captureMethod === "manual" ? "requires_capture" : "succeeded";
+
+      const updatedData = buildPaymentIntentShape(id, existing.created, existing.client_secret as string, {
+        amount: existing.amount,
+        currency: existing.currency,
+        customer: existing.customer as string | null,
+        payment_method: pmId,
+        capture_method: captureMethod,
+        status: newStatus,
+        metadata: existing.metadata as Record<string, string>,
+        latest_charge: charge.id,
+        amount_received: newStatus === "succeeded" ? existing.amount : 0,
+      });
+
+      this.db.update(paymentIntents)
+        .set({
+          payment_method_id: pmId,
+          status: newStatus,
+          data: JSON.stringify(updatedData),
+        })
+        .where(eq(paymentIntents.id, id))
+        .run();
+
+      return updatedData;
     }
 
     // Determine PM to use
@@ -276,6 +318,37 @@ export class PaymentIntentService {
 
     // Simulate the payment
     const outcome = this.simulatePaymentOutcome(pm);
+
+    // 3DS: requires_action
+    if (outcome.requiresAction) {
+      const updatedData = buildPaymentIntentShape(id, existing.created, existing.client_secret as string, {
+        amount: existing.amount,
+        currency: existing.currency,
+        customer: existing.customer as string | null,
+        payment_method: pmId,
+        capture_method: captureMethod,
+        status: "requires_action",
+        metadata: existing.metadata as Record<string, string>,
+        next_action: {
+          type: "use_stripe_sdk",
+          use_stripe_sdk: {
+            type: "three_d_secure_redirect",
+            stripe_js: "",
+          },
+        } as unknown as Stripe.PaymentIntent.NextAction,
+      });
+
+      this.db.update(paymentIntents)
+        .set({
+          payment_method_id: pmId,
+          status: "requires_action",
+          data: JSON.stringify(updatedData),
+        })
+        .where(eq(paymentIntents.id, id))
+        .run();
+
+      return updatedData;
+    }
 
     if (!outcome.success) {
       // Payment failed

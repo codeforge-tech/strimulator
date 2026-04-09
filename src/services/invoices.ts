@@ -14,6 +14,7 @@ export interface CreateInvoiceParams {
   currency?: string;
   amount_due?: number;
   metadata?: Record<string, string>;
+  billing_reason?: string;
 }
 
 export interface ListInvoiceParams extends ListParams {
@@ -92,7 +93,13 @@ function buildInvoiceShape(
 }
 
 export class InvoiceService {
-  constructor(private db: StrimulatorDB) {}
+  constructor(private db: StrimulatorDB) {
+    // Initialize counter from existing invoices to avoid duplicates across restarts
+    const rows = db.select().from(invoices).all();
+    if (rows.length > 0) {
+      invoiceCounter = rows.length;
+    }
+  }
 
   create(params: CreateInvoiceParams): Stripe.Invoice {
     if (!params.customer) {
@@ -112,6 +119,7 @@ export class InvoiceService {
       amount_paid: 0,
       status: "draft",
       metadata: params.metadata,
+      billing_reason: params.billing_reason ?? null,
     });
 
     this.db.insert(invoices).values({
