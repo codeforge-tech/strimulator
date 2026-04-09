@@ -3,15 +3,13 @@ import type { StrimulatorDB } from "../db";
 import { TestClockService } from "../services/test-clocks";
 import { EventService } from "../services/events";
 import { InvoiceService } from "../services/invoices";
-import { PriceService } from "../services/prices";
 import { parseStripeBody } from "../middleware/form-parser";
 import { parseListParams } from "../lib/pagination";
 import { StripeError, invalidRequestError } from "../errors";
 
 export function testClockRoutes(db: StrimulatorDB, eventService?: EventService) {
   const invoiceService = new InvoiceService(db);
-  const priceService = new PriceService(db);
-  const service = new TestClockService(db, eventService, invoiceService, priceService);
+  const service = new TestClockService(db, eventService, invoiceService);
 
   return new Elysia({ prefix: "/v1/test_helpers/test_clocks" })
     .onError(({ error, set }) => {

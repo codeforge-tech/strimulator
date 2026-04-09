@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "bun:test";
 import { Elysia } from "elysia";
 import { createDB, getRawSqlite } from "../../src/db";
 import { dashboardServer } from "../../src/dashboard/server";
-import { actionFlags } from "../../src/dashboard/api";
+import { actionFlags } from "../../src/lib/action-flags";
 import { TestClockService } from "../../src/services/test-clocks";
 
 function createTestApp() {

@@ -14,10 +14,7 @@ import { InvoiceService } from "../services/invoices";
 import { PriceService } from "../services/prices";
 import { StripeError } from "../errors";
 
-// In-memory flag: set to an error code to make the next PaymentIntent confirm fail
-export const actionFlags = {
-  failNextPayment: null as string | null,
-};
+import { actionFlags } from "../lib/action-flags";
 
 const RESOURCE_TYPES: Record<string, string> = {
   customers: "customers",

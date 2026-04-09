@@ -9,8 +9,7 @@ import { buildListResponse, type ListParams, type ListResponse } from "../lib/pa
 import { resourceNotFoundError, invalidRequestError } from "../errors";
 import type { EventService } from "./events";
 import type { InvoiceService } from "./invoices";
-import type { PriceService } from "./prices";
-import { actionFlags } from "../dashboard/api";
+import { actionFlags } from "../lib/action-flags";
 
 export interface CreateTestClockParams {
   frozen_time: number;
@@ -43,7 +42,6 @@ export class TestClockService {
     private db: StrimulatorDB,
     private eventService?: EventService,
     private invoiceService?: InvoiceService,
-    private priceService?: PriceService,
   ) {}
 
   create(params: CreateTestClockParams): Stripe.TestHelpers.TestClock {
@@ -134,7 +132,7 @@ export class TestClockService {
   }
 
   private processBillingCycles(clockId: string, frozenTime: number): void {
-    if (!this.eventService || !this.invoiceService || !this.priceService) return;
+    if (!this.eventService || !this.invoiceService) return;
 
     const THIRTY_DAYS = 30 * 24 * 60 * 60;
 

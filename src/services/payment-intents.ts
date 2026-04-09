@@ -10,7 +10,7 @@ import { randomBytes } from "crypto";
 import { resourceNotFoundError, invalidRequestError, stateTransitionError, cardError } from "../errors";
 import type { ChargeService } from "./charges";
 import type { PaymentMethodService } from "./payment-methods";
-import { actionFlags } from "../dashboard/api";
+import { actionFlags } from "../lib/action-flags";
 
 export interface CreatePaymentIntentParams {
   amount: number;
