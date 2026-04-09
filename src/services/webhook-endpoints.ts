@@ -14,6 +14,12 @@ export interface CreateWebhookEndpointParams {
   metadata?: Record<string, string>;
 }
 
+export interface UpdateWebhookEndpointParams {
+  url?: string;
+  enabled_events?: string[];
+  status?: string;
+}
+
 function buildEndpointShape(
   id: string,
   createdAt: number,
@@ -73,6 +79,35 @@ export class WebhookEndpointService {
     }
 
     return JSON.parse(row.data as string) as Stripe.WebhookEndpoint;
+  }
+
+  update(id: string, params: UpdateWebhookEndpointParams): Stripe.WebhookEndpoint {
+    const existing = this.retrieve(id);
+
+    const updated: Record<string, unknown> = { ...existing };
+    const dbUpdates: Record<string, unknown> = {};
+
+    if (params.url !== undefined) {
+      updated.url = params.url;
+      dbUpdates.url = params.url;
+    }
+    if (params.enabled_events !== undefined) {
+      updated.enabled_events = params.enabled_events;
+      dbUpdates.enabledEvents = JSON.stringify(params.enabled_events);
+    }
+    if (params.status !== undefined) {
+      updated.status = params.status;
+      dbUpdates.status = params.status;
+    }
+
+    dbUpdates.data = JSON.stringify(updated);
+
+    this.db.update(webhookEndpoints)
+      .set(dbUpdates)
+      .where(eq(webhookEndpoints.id, id))
+      .run();
+
+    return updated as unknown as Stripe.WebhookEndpoint;
   }
 
   del(id: string): Stripe.DeletedWebhookEndpoint {
