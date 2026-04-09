@@ -4,6 +4,8 @@ import { apiKeyAuth } from "./middleware/api-key-auth";
 import { requestLogger } from "./middleware/request-logger";
 import { StripeError } from "./errors";
 import { customerRoutes } from "./routes/customers";
+import { productRoutes } from "./routes/products";
+import { priceRoutes } from "./routes/prices";
 
 export function createApp(db?: StrimulatorDB) {
   const database = db ?? createDB();
@@ -38,5 +40,7 @@ export function createApp(db?: StrimulatorDB) {
       livemode: false,
     }))
     .use(customerRoutes(database))
+    .use(productRoutes(database))
+    .use(priceRoutes(database))
     .decorate("db", database);
 }
