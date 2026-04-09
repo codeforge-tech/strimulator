@@ -1,6 +1,7 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import Stripe from "stripe";
 import { createApp } from "../../src/app";
+import { actionFlags } from "../../src/lib/action-flags";
 
 let app: ReturnType<typeof createApp>;
 let stripe: Stripe;
@@ -119,6 +120,51 @@ describe("Test Clock Billing", () => {
 
     const updatedSub = await stripe.subscriptions.retrieve(sub.id);
     expect(updatedSub.status).toBe("active");
+  });
+
+  test("advance clock with failNextPayment sets subscription to past_due", async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const clock = await stripe.testHelpers.testClocks.create({
+      frozen_time: now,
+    });
+
+    const customer = await stripe.customers.create({ email: "pastdue@test.com" });
+    const product = await stripe.products.create({ name: "PastDue Product" });
+    const price = await stripe.prices.create({
+      product: product.id,
+      unit_amount: 4000,
+      currency: "usd",
+      recurring: { interval: "month" },
+    });
+
+    const sub = await stripe.subscriptions.create({
+      customer: customer.id,
+      items: [{ price: price.id }],
+      test_clock: clock.id,
+    } as any);
+
+    const periodEnd = (sub as any).current_period_end;
+
+    // Set the flag to fail the next payment
+    actionFlags.failNextPayment = "card_declined";
+
+    const advanced = await stripe.testHelpers.testClocks.advance(clock.id, {
+      frozen_time: periodEnd + 1,
+    });
+    expect(advanced.status).toBe("ready");
+
+    // Subscription should be past_due
+    const updatedSub = await stripe.subscriptions.retrieve(sub.id);
+    expect(updatedSub.status).toBe("past_due");
+
+    // Invoice should exist but not be paid
+    const invoices = await stripe.invoices.list({ subscription: sub.id, limit: 5 } as any);
+    const cycleInvoice = invoices.data.find((inv) => (inv as any).billing_reason === "subscription_cycle");
+    expect(cycleInvoice).toBeDefined();
+    expect(cycleInvoice!.status).toBe("open");
+
+    // Flag should be consumed
+    expect(actionFlags.failNextPayment).toBeNull();
   });
 
   test("advance clock: status transitions through advancing to ready", async () => {

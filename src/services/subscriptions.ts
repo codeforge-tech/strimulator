@@ -244,7 +244,6 @@ export class SubscriptionService {
       };
 
       const existingItems = updatedItems.slice();
-      const touchedIds = new Set<string>();
 
       for (const itemParam of params.items) {
         const price = this.priceService.retrieve(itemParam.price);
@@ -252,7 +251,6 @@ export class SubscriptionService {
 
         if (itemParam.id) {
           // Update existing item by id
-          touchedIds.add(itemParam.id);
           const idx = updatedItems.findIndex(i => i.id === itemParam.id);
           if (idx !== -1) {
             const itemShape = buildSubscriptionItemShape(itemParam.id, updatedItems[idx].created, id, price, quantity);
@@ -271,7 +269,6 @@ export class SubscriptionService {
         } else if (existingItems.length === 1 && params.items.length === 1) {
           // Single-plan upgrade: replace the only existing item
           const existingItem = existingItems[0];
-          touchedIds.add(existingItem.id);
           const itemShape = buildSubscriptionItemShape(existingItem.id, existingItem.created, id, price, quantity);
           updatedItems = [itemShape];
 

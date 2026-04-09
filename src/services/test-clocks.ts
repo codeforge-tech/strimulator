@@ -170,25 +170,25 @@ export class TestClockService {
         Object.assign(sub, updatedSub);
       }
 
+      // Calculate amount from subscription items (invariant across period rolls)
+      const itemRows = this.db.select().from(subscriptionItems)
+        .where(eq(subscriptionItems.subscriptionId, sub.id))
+        .all();
+
+      let totalAmount = 0;
+      for (const itemRow of itemRows) {
+        const item = JSON.parse(itemRow.data as string) as any;
+        const priceAmount = item.price?.unit_amount ?? 0;
+        const quantity = itemRow.quantity ?? 1;
+        totalAmount += priceAmount * quantity;
+      }
+
       // Roll periods
       while (frozenTime >= periodEnd && currentStatus === "active") {
         const prevPeriodStart = periodStart;
         const prevPeriodEnd = periodEnd;
         periodStart = periodEnd;
         periodEnd = periodStart + THIRTY_DAYS;
-
-        // Calculate amount from subscription items
-        const itemRows = this.db.select().from(subscriptionItems)
-          .where(eq(subscriptionItems.subscriptionId, sub.id))
-          .all();
-
-        let totalAmount = 0;
-        for (const itemRow of itemRows) {
-          const item = JSON.parse(itemRow.data as string) as any;
-          const priceAmount = item.price?.unit_amount ?? 0;
-          const quantity = itemRow.quantity ?? 1;
-          totalAmount += priceAmount * quantity;
-        }
 
         // Update subscription period
         const rolledSub = {
