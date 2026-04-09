@@ -64,6 +64,14 @@ export function invoiceRoutes(db: StrimulatorDB, eventService?: EventService) {
       });
     })
 
+    // GET /v1/invoices/search — search (MUST be before /:id)
+    .get("/search", async ({ request }) => {
+      const url = new URL(request.url);
+      const query = url.searchParams.get("query") ?? "";
+      const limit = parseInt(url.searchParams.get("limit") ?? "10", 10);
+      return service.search(query, limit);
+    })
+
     // GET /v1/invoices/:id — retrieve
     .get("/:id", async ({ params: { id }, request }) => {
       const url = new URL(request.url);

@@ -5,6 +5,7 @@ import { subscriptions, subscriptionItems } from "../db/schema/subscriptions";
 import { generateId } from "../lib/id-generator";
 import { now } from "../lib/timestamps";
 import { buildListResponse, type ListParams, type ListResponse } from "../lib/pagination";
+import { parseSearchQuery, matchesCondition, buildSearchResult, type SearchResult } from "../lib/search";
 import { resourceNotFoundError, invalidRequestError, stateTransitionError } from "../errors";
 import type { InvoiceService } from "./invoices";
 import type { PriceService } from "./prices";
@@ -247,6 +248,24 @@ export class SubscriptionService {
       .run();
 
     return updated;
+  }
+
+  search(queryStr: string, limit: number = 10): SearchResult<Stripe.Subscription> {
+    const conditions = parseSearchQuery(queryStr);
+    const allRows = this.db.select().from(subscriptions).all();
+
+    const filtered = allRows.filter(row => {
+      const data = JSON.parse(row.data as string) as Record<string, unknown>;
+      return conditions.every(cond => matchesCondition(data, cond));
+    });
+
+    const items = filtered.slice(0, limit);
+    return buildSearchResult(
+      items.map(r => JSON.parse(r.data as string) as Stripe.Subscription),
+      "/v1/subscriptions/search",
+      filtered.length > limit,
+      filtered.length,
+    );
   }
 
   list(params: ListSubscriptionParams): ListResponse<Stripe.Subscription> {

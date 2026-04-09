@@ -72,6 +72,14 @@ export function subscriptionRoutes(db: StrimulatorDB, eventService?: EventServic
       });
     })
 
+    // GET /v1/subscriptions/search — search (MUST be before /:id)
+    .get("/search", async ({ request }) => {
+      const url = new URL(request.url);
+      const query = url.searchParams.get("query") ?? "";
+      const limit = parseInt(url.searchParams.get("limit") ?? "10", 10);
+      return service.search(query, limit);
+    })
+
     // GET /v1/subscriptions/:id — retrieve
     .get("/:id", async ({ params: { id }, request }) => {
       const url = new URL(request.url);

@@ -5,6 +5,7 @@ import { customers } from "../db/schema/customers";
 import { generateId } from "../lib/id-generator";
 import { now } from "../lib/timestamps";
 import { buildListResponse, type ListParams, type ListResponse } from "../lib/pagination";
+import { parseSearchQuery, matchesCondition, buildSearchResult, type SearchResult } from "../lib/search";
 import { resourceNotFoundError } from "../errors";
 
 export interface CreateCustomerParams {
@@ -144,6 +145,24 @@ export class CustomerService {
       object: "customer",
       deleted: true,
     };
+  }
+
+  search(queryStr: string, limit: number = 10): SearchResult<Stripe.Customer> {
+    const conditions = parseSearchQuery(queryStr);
+    const allRows = this.db.select().from(customers).where(eq(customers.deleted, 0)).all();
+
+    const filtered = allRows.filter(row => {
+      const data = JSON.parse(row.data) as Record<string, unknown>;
+      return conditions.every(cond => matchesCondition(data, cond));
+    });
+
+    const items = filtered.slice(0, limit);
+    return buildSearchResult(
+      items.map(r => JSON.parse(r.data) as Stripe.Customer),
+      "/v1/customers/search",
+      filtered.length > limit,
+      filtered.length,
+    );
   }
 
   list(params: ListParams): ListResponse<Stripe.Customer> {

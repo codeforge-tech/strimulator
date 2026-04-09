@@ -5,6 +5,7 @@ import { invoices } from "../db/schema/invoices";
 import { generateId } from "../lib/id-generator";
 import { now } from "../lib/timestamps";
 import { buildListResponse, type ListParams, type ListResponse } from "../lib/pagination";
+import { parseSearchQuery, matchesCondition, buildSearchResult, type SearchResult } from "../lib/search";
 import { resourceNotFoundError, invalidRequestError, stateTransitionError } from "../errors";
 
 export interface CreateInvoiceParams {
@@ -267,6 +268,24 @@ export class InvoiceService {
       .run();
 
     return updated;
+  }
+
+  search(queryStr: string, limit: number = 10): SearchResult<Stripe.Invoice> {
+    const conditions = parseSearchQuery(queryStr);
+    const allRows = this.db.select().from(invoices).all();
+
+    const filtered = allRows.filter(row => {
+      const data = JSON.parse(row.data as string) as Record<string, unknown>;
+      return conditions.every(cond => matchesCondition(data, cond));
+    });
+
+    const items = filtered.slice(0, limit);
+    return buildSearchResult(
+      items.map(r => JSON.parse(r.data as string) as Stripe.Invoice),
+      "/v1/invoices/search",
+      filtered.length > limit,
+      filtered.length,
+    );
   }
 
   list(params: ListInvoiceParams): ListResponse<Stripe.Invoice> {

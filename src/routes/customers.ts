@@ -32,6 +32,14 @@ export function customerRoutes(db: StrimulatorDB, eventService?: EventService) {
       return service.list(listParams);
     })
 
+    // GET /v1/customers/search — search (MUST be before /:id)
+    .get("/search", async ({ request }) => {
+      const url = new URL(request.url);
+      const query = url.searchParams.get("query") ?? "";
+      const limit = parseInt(url.searchParams.get("limit") ?? "10", 10);
+      return service.search(query, limit);
+    })
+
     // GET /v1/customers/:id — retrieve
     .get("/:id", ({ params: { id } }) => {
       return service.retrieve(id);

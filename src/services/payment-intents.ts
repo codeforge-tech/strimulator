@@ -5,9 +5,11 @@ import { paymentIntents } from "../db/schema/payment-intents";
 import { generateId } from "../lib/id-generator";
 import { now } from "../lib/timestamps";
 import { buildListResponse, type ListParams, type ListResponse } from "../lib/pagination";
+import { parseSearchQuery, matchesCondition, buildSearchResult, type SearchResult } from "../lib/search";
 import { resourceNotFoundError, invalidRequestError, stateTransitionError, cardError } from "../errors";
 import type { ChargeService } from "./charges";
 import type { PaymentMethodService } from "./payment-methods";
+import { actionFlags } from "../dashboard/api";
 
 export interface CreatePaymentIntentParams {
   amount: number;
@@ -130,6 +132,18 @@ export class PaymentIntentService {
   ) {}
 
   private simulatePaymentOutcome(pm: Stripe.PaymentMethod): SimulationResult {
+    // Check the global action flag first — takes precedence over card-based simulation
+    if (actionFlags.failNextPayment) {
+      const code = actionFlags.failNextPayment;
+      actionFlags.failNextPayment = null; // clear after use
+      return {
+        success: false,
+        failureCode: code,
+        failureMessage: "Your card was declined.",
+        declineCode: "generic_decline",
+      };
+    }
+
     const last4 = pm.card?.last4;
     if (last4 === "0002") {
       return {
@@ -405,6 +419,24 @@ export class PaymentIntentService {
       .run();
 
     return updatedData;
+  }
+
+  search(queryStr: string, limit: number = 10): SearchResult<Stripe.PaymentIntent> {
+    const conditions = parseSearchQuery(queryStr);
+    const allRows = this.db.select().from(paymentIntents).all();
+
+    const filtered = allRows.filter(row => {
+      const data = JSON.parse(row.data) as Record<string, unknown>;
+      return conditions.every(cond => matchesCondition(data, cond));
+    });
+
+    const items = filtered.slice(0, limit);
+    return buildSearchResult(
+      items.map(r => JSON.parse(r.data) as Stripe.PaymentIntent),
+      "/v1/payment_intents/search",
+      filtered.length > limit,
+      filtered.length,
+    );
   }
 
   list(params: ListPaymentIntentParams): ListResponse<Stripe.PaymentIntent> {
