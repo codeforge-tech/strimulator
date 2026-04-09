@@ -48,7 +48,7 @@ export function invoiceRoutes(db: StrimulatorDB, eventService?: EventService) {
         params.amount_due = parseInt(params.amount_due, 10);
       }
 
-      const invoice = service.create(params);
+      const invoice = service.create(params as any);
       eventService?.emit("invoice.created", invoice as unknown as Record<string, unknown>);
       return invoice;
     })

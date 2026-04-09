@@ -347,8 +347,9 @@ export function dashboardApi(db: StrimulatorDB) {
         }
 
         // Advance the billing period by the current period length
-        const periodLength = sub.current_period_end - sub.current_period_start;
-        const newPeriodStart = sub.current_period_end;
+        const subAny = sub as any;
+        const periodLength = subAny.current_period_end - subAny.current_period_start;
+        const newPeriodStart = subAny.current_period_end;
         const newPeriodEnd = newPeriodStart + periodLength;
 
         // Update the subscription data in the DB

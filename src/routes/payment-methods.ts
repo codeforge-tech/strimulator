@@ -21,7 +21,7 @@ export function paymentMethodRoutes(db: StrimulatorDB, eventService?: EventServi
     .post("/", async ({ request }) => {
       const rawBody = await request.text();
       const params = parseStripeBody(rawBody);
-      const pm = service.create(params);
+      const pm = service.create(params as any);
       eventService?.emit("payment_method.created", pm as unknown as Record<string, unknown>);
       return pm;
     })

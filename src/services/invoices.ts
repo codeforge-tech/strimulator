@@ -158,7 +158,7 @@ export class InvoiceService {
 
     const updated = buildInvoiceShape(id, existing.created, {
       customer: existing.customer as string,
-      subscription: existing.subscription as string | null,
+      subscription: (existing as any).subscription as string | null,
       currency: existing.currency,
       amount_due: existing.amount_due,
       amount_paid: existing.amount_paid,
@@ -200,7 +200,7 @@ export class InvoiceService {
 
     const updated = buildInvoiceShape(id, existing.created, {
       customer: existing.customer as string,
-      subscription: existing.subscription as string | null,
+      subscription: (existing as any).subscription as string | null,
       currency: existing.currency,
       amount_due: existing.amount_due,
       amount_paid: existing.amount_due,
@@ -243,7 +243,7 @@ export class InvoiceService {
 
     const updated = buildInvoiceShape(id, existing.created, {
       customer: existing.customer as string,
-      subscription: existing.subscription as string | null,
+      subscription: (existing as any).subscription as string | null,
       currency: existing.currency,
       amount_due: existing.amount_due,
       amount_paid: existing.amount_paid,

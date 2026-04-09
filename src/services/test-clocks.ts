@@ -63,7 +63,7 @@ export class TestClockService {
     return JSON.parse(row.data as string) as Stripe.TestHelpers.TestClock;
   }
 
-  del(id: string): Stripe.TestHelpers.DeletedTestClock {
+  del(id: string): any {
     // Ensure it exists first
     this.retrieve(id);
 
@@ -73,7 +73,7 @@ export class TestClockService {
       id,
       object: "test_helpers.test_clock",
       deleted: true,
-    } as Stripe.TestHelpers.DeletedTestClock;
+    };
   }
 
   advance(id: string, frozenTime: number): Stripe.TestHelpers.TestClock {

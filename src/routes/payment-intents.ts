@@ -41,7 +41,7 @@ export function paymentIntentRoutes(db: StrimulatorDB, eventService?: EventServi
         params.confirm = params.confirm === "true";
       }
 
-      const pi = service.create(params);
+      const pi = service.create(params as any);
       eventService?.emit("payment_intent.created", pi as unknown as Record<string, unknown>);
       // If confirm=true was passed, the PI may already be succeeded/failed — emit that too
       if (params.confirm && params.payment_method) {

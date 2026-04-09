@@ -262,7 +262,7 @@ export class PaymentIntentService {
     }
 
     // Determine PM to use
-    const pmId = params.payment_method ?? existing.payment_method;
+    const pmId = params.payment_method ?? (existing.payment_method as string | null);
 
     if (!pmId) {
       throw invalidRequestError(
@@ -279,7 +279,7 @@ export class PaymentIntentService {
 
     if (!outcome.success) {
       // Payment failed
-      const updatedData = buildPaymentIntentShape(id, existing.created, existing.client_secret, {
+      const updatedData = buildPaymentIntentShape(id, existing.created, existing.client_secret as string, {
         amount: existing.amount,
         currency: existing.currency,
         customer: existing.customer as string | null,
@@ -320,7 +320,7 @@ export class PaymentIntentService {
 
     const newStatus: PaymentIntentStatus = captureMethod === "manual" ? "requires_capture" : "succeeded";
 
-    const updatedData = buildPaymentIntentShape(id, existing.created, existing.client_secret, {
+    const updatedData = buildPaymentIntentShape(id, existing.created, existing.client_secret as string, {
       amount: existing.amount,
       currency: existing.currency,
       customer: existing.customer as string | null,
@@ -359,7 +359,7 @@ export class PaymentIntentService {
 
     const amountToCapture = params.amount_to_capture ?? existing.amount;
 
-    const updatedData = buildPaymentIntentShape(id, existing.created, existing.client_secret, {
+    const updatedData = buildPaymentIntentShape(id, existing.created, existing.client_secret as string, {
       amount: existing.amount,
       currency: existing.currency,
       customer: existing.customer as string | null,
@@ -397,7 +397,7 @@ export class PaymentIntentService {
 
     const canceledAt = now();
 
-    const updatedData = buildPaymentIntentShape(id, existing.created, existing.client_secret, {
+    const updatedData = buildPaymentIntentShape(id, existing.created, existing.client_secret as string, {
       amount: existing.amount,
       currency: existing.currency,
       customer: existing.customer as string | null,

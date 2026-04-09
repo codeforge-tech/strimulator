@@ -57,7 +57,7 @@ export function subscriptionRoutes(db: StrimulatorDB, eventService?: EventServic
         params.trial_period_days = parseInt(params.trial_period_days, 10);
       }
 
-      const sub = service.create(params);
+      const sub = service.create(params as any);
       eventService?.emit("customer.subscription.created", sub as unknown as Record<string, unknown>);
       return sub;
     })
