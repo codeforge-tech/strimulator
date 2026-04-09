@@ -3,6 +3,7 @@ import { HELPERS } from "./helpers";
 import { ACTIVITY_TAB } from "./tabs/activity";
 import { RESOURCES_TAB } from "./tabs/resources";
 import { ACTIONS_TAB } from "./tabs/actions";
+import { WEBHOOKS_TAB } from "./tabs/webhooks";
 
 export const DASHBOARD_HTML = `<!DOCTYPE html>
 <html lang="en">
@@ -29,6 +30,7 @@ ${HELPERS}
 ${ACTIVITY_TAB}
 ${RESOURCES_TAB}
 ${ACTIONS_TAB}
+${WEBHOOKS_TAB}
     // ── App ───────────────────────────────────────────────────────────────────
 
     function App() {
@@ -77,6 +79,7 @@ ${ACTIONS_TAB}
       const TABS = [
         { key: 'activity',  label: 'Activity' },
         { key: 'resources', label: 'Resources' },
+        { key: 'webhooks',  label: 'Webhooks' },
         { key: 'actions',   label: 'Actions' },
       ];
 
@@ -94,6 +97,7 @@ ${ACTIONS_TAB}
 
           \${tab === 'activity'  ? html\`<\${ActivityTab}  stats=\${stats} requests=\${requests} />\` : null}
           \${tab === 'resources' ? html\`<\${ResourcesTab} stats=\${stats} />\` : null}
+          \${tab === 'webhooks'  ? html\`<\${WebhooksTab} />\` : null}
           \${tab === 'actions'   ? html\`<\${ActionsTab} />\` : null}
         </div>
       \`;
