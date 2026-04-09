@@ -1,12 +1,14 @@
 import { Elysia } from "elysia";
 import type { StrimulatorDB } from "../db";
 import { CustomerService } from "../services/customers";
+import { EventService } from "../services/events";
 import { parseStripeBody } from "../middleware/form-parser";
 import { parseListParams } from "../lib/pagination";
 import { StripeError } from "../errors";
 
 export function customerRoutes(db: StrimulatorDB) {
   const service = new CustomerService(db);
+  const eventService = new EventService(db);
 
   return new Elysia({ prefix: "/v1/customers" })
     .onError(({ error, set }) => {
@@ -20,7 +22,9 @@ export function customerRoutes(db: StrimulatorDB) {
     .post("/", async ({ request }) => {
       const rawBody = await request.text();
       const params = parseStripeBody(rawBody);
-      return service.create(params);
+      const customer = service.create(params);
+      eventService.emit("customer.created", customer as unknown as Record<string, unknown>);
+      return customer;
     })
 
     // GET /v1/customers — list
