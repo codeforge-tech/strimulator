@@ -9,6 +9,8 @@ import { priceRoutes } from "./routes/prices";
 import { paymentIntentRoutes } from "./routes/payment-intents";
 import { paymentMethodRoutes } from "./routes/payment-methods";
 import { chargeRoutes } from "./routes/charges";
+import { refundRoutes } from "./routes/refunds";
+import { setupIntentRoutes } from "./routes/setup-intents";
 
 export function createApp(db?: StrimulatorDB) {
   const database = db ?? createDB();
@@ -48,5 +50,7 @@ export function createApp(db?: StrimulatorDB) {
     .use(paymentIntentRoutes(database))
     .use(paymentMethodRoutes(database))
     .use(chargeRoutes(database))
+    .use(refundRoutes(database))
+    .use(setupIntentRoutes(database))
     .decorate("db", database);
 }
