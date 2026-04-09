@@ -14,6 +14,7 @@ export interface CreateInvoiceParams {
   currency?: string;
   amount_due?: number;
   metadata?: Record<string, string>;
+  billing_reason?: string;
 }
 
 export interface ListInvoiceParams extends ListParams {
@@ -118,6 +119,7 @@ export class InvoiceService {
       amount_paid: 0,
       status: "draft",
       metadata: params.metadata,
+      billing_reason: params.billing_reason ?? null,
     });
 
     this.db.insert(invoices).values({

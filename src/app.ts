@@ -75,7 +75,7 @@ export function createApp(db?: StrimulatorDB) {
     .use(invoiceRoutes(database, eventService))
     .use(eventRoutes(database))
     .use(webhookEndpointRoutes(database))
-    .use(testClockRoutes(database))
+    .use(testClockRoutes(database, eventService))
     .use(dashboardServer(database))
     .decorate("db", database);
 }

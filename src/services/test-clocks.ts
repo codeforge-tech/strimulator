@@ -2,10 +2,15 @@ import type Stripe from "stripe";
 import { eq } from "drizzle-orm";
 import type { StrimulatorDB } from "../db";
 import { testClocks } from "../db/schema/test-clocks";
+import { subscriptions, subscriptionItems } from "../db/schema/subscriptions";
 import { generateId } from "../lib/id-generator";
 import { now } from "../lib/timestamps";
 import { buildListResponse, type ListParams, type ListResponse } from "../lib/pagination";
 import { resourceNotFoundError, invalidRequestError } from "../errors";
+import type { EventService } from "./events";
+import type { InvoiceService } from "./invoices";
+import type { PriceService } from "./prices";
+import { actionFlags } from "../dashboard/api";
 
 export interface CreateTestClockParams {
   frozen_time: number;
@@ -34,7 +39,12 @@ function buildTestClockShape(
 }
 
 export class TestClockService {
-  constructor(private db: StrimulatorDB) {}
+  constructor(
+    private db: StrimulatorDB,
+    private eventService?: EventService,
+    private invoiceService?: InvoiceService,
+    private priceService?: PriceService,
+  ) {}
 
   create(params: CreateTestClockParams): Stripe.TestHelpers.TestClock {
     const id = generateId("test_clock");
@@ -87,20 +97,160 @@ export class TestClockService {
       );
     }
 
-    const updated = {
+    // Set status to advancing
+    const advancing = {
       ...existing,
       frozen_time: frozenTime,
+      status: "advancing",
     } as unknown as Stripe.TestHelpers.TestClock;
 
     this.db.update(testClocks)
       .set({
         frozenTime,
-        data: JSON.stringify(updated),
+        status: "advancing",
+        data: JSON.stringify(advancing),
       })
       .where(eq(testClocks.id, id))
       .run();
 
-    return updated;
+    // Process billing for linked subscriptions
+    this.processBillingCycles(id, frozenTime);
+
+    // Set status back to ready
+    const ready = {
+      ...advancing,
+      status: "ready",
+    } as unknown as Stripe.TestHelpers.TestClock;
+
+    this.db.update(testClocks)
+      .set({
+        status: "ready",
+        data: JSON.stringify(ready),
+      })
+      .where(eq(testClocks.id, id))
+      .run();
+
+    return ready;
+  }
+
+  private processBillingCycles(clockId: string, frozenTime: number): void {
+    if (!this.eventService || !this.invoiceService || !this.priceService) return;
+
+    const THIRTY_DAYS = 30 * 24 * 60 * 60;
+
+    // Find all subscriptions linked to this clock
+    const subRows = this.db.select().from(subscriptions)
+      .where(eq(subscriptions.testClockId, clockId))
+      .all();
+
+    for (const subRow of subRows) {
+      const sub = JSON.parse(subRow.data as string) as any;
+      if (sub.status !== "active" && sub.status !== "trialing") continue;
+
+      let currentStatus = sub.status as string;
+      let periodStart = subRow.currentPeriodStart;
+      let periodEnd = subRow.currentPeriodEnd;
+      let trialEnd = sub.trial_end as number | null;
+
+      // End trial if needed
+      if (currentStatus === "trialing" && trialEnd && frozenTime >= trialEnd) {
+        const prevStatus = currentStatus;
+        currentStatus = "active";
+
+        const updatedSub = { ...sub, status: "active" };
+        this.db.update(subscriptions)
+          .set({ status: "active", data: JSON.stringify(updatedSub) })
+          .where(eq(subscriptions.id, sub.id))
+          .run();
+
+        this.eventService.emit(
+          "customer.subscription.updated",
+          updatedSub,
+          { status: prevStatus, trial_end: trialEnd },
+        );
+
+        Object.assign(sub, updatedSub);
+      }
+
+      // Roll periods
+      while (frozenTime >= periodEnd && currentStatus === "active") {
+        const prevPeriodStart = periodStart;
+        const prevPeriodEnd = periodEnd;
+        periodStart = periodEnd;
+        periodEnd = periodStart + THIRTY_DAYS;
+
+        // Calculate amount from subscription items
+        const itemRows = this.db.select().from(subscriptionItems)
+          .where(eq(subscriptionItems.subscriptionId, sub.id))
+          .all();
+
+        let totalAmount = 0;
+        for (const itemRow of itemRows) {
+          const item = JSON.parse(itemRow.data as string) as any;
+          const priceAmount = item.price?.unit_amount ?? 0;
+          const quantity = itemRow.quantity ?? 1;
+          totalAmount += priceAmount * quantity;
+        }
+
+        // Update subscription period
+        const rolledSub = {
+          ...sub,
+          current_period_start: periodStart,
+          current_period_end: periodEnd,
+          status: currentStatus,
+        };
+
+        this.db.update(subscriptions)
+          .set({
+            currentPeriodStart: periodStart,
+            currentPeriodEnd: periodEnd,
+            status: currentStatus,
+            data: JSON.stringify(rolledSub),
+          })
+          .where(eq(subscriptions.id, sub.id))
+          .run();
+
+        this.eventService.emit(
+          "customer.subscription.updated",
+          rolledSub,
+          { current_period_start: prevPeriodStart, current_period_end: prevPeriodEnd },
+        );
+
+        // Create invoice
+        const invoice = this.invoiceService.create({
+          customer: sub.customer as string,
+          subscription: sub.id,
+          currency: sub.currency,
+          amount_due: totalAmount,
+          billing_reason: "subscription_cycle",
+        });
+
+        // Finalize
+        this.invoiceService.finalizeInvoice(invoice.id);
+
+        // Auto-pay (unless failNextPayment flag is set)
+        if (actionFlags.failNextPayment) {
+          actionFlags.failNextPayment = null;
+          const pastDueSub = { ...rolledSub, status: "past_due" };
+          this.db.update(subscriptions)
+            .set({ status: "past_due", data: JSON.stringify(pastDueSub) })
+            .where(eq(subscriptions.id, sub.id))
+            .run();
+
+          this.eventService.emit(
+            "customer.subscription.updated",
+            pastDueSub,
+            { status: "active" },
+          );
+
+          currentStatus = "past_due";
+        } else {
+          this.invoiceService.pay(invoice.id);
+        }
+
+        Object.assign(sub, rolledSub);
+      }
+    }
   }
 
   list(params: ListParams): ListResponse<Stripe.TestHelpers.TestClock> {
