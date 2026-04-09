@@ -23,6 +23,7 @@ export interface CreateSubscriptionParams {
   items: CreateSubscriptionItemParam[];
   trial_period_days?: number;
   metadata?: Record<string, string>;
+  test_clock?: string;
 }
 
 export interface ListSubscriptionParams extends ListParams {
@@ -73,6 +74,7 @@ function buildSubscriptionShape(
     cancel_at?: number | null;
     cancel_at_period_end?: boolean;
     latest_invoice?: string | null;
+    test_clock?: string | null;
   },
 ): Stripe.Subscription {
   return {
@@ -100,7 +102,7 @@ function buildSubscriptionShape(
     livemode: false,
     metadata: params.metadata ?? {},
     status: params.status as Stripe.Subscription.Status,
-    test_clock: null,
+    test_clock: params.test_clock ?? null,
     trial_end: params.trial_end ?? null,
     trial_start: params.trial_start ?? null,
   } as unknown as Stripe.Subscription;
@@ -177,6 +179,7 @@ export class SubscriptionService {
       trial_end: trialEnd,
       items: itemShapes,
       metadata: params.metadata,
+      test_clock: params.test_clock ?? null,
     });
 
     // Insert subscription
@@ -186,7 +189,7 @@ export class SubscriptionService {
       status,
       currentPeriodStart: periodStart,
       currentPeriodEnd: periodEnd,
-      testClockId: null,
+      testClockId: params.test_clock ?? null,
       created: createdAt,
       data: JSON.stringify(subscription),
     }).run();
