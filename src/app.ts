@@ -3,6 +3,7 @@ import { createDB, type StrimulatorDB } from "./db";
 import { apiKeyAuth } from "./middleware/api-key-auth";
 import { requestLogger } from "./middleware/request-logger";
 import { StripeError } from "./errors";
+import { customerRoutes } from "./routes/customers";
 
 export function createApp(db?: StrimulatorDB) {
   const database = db ?? createDB();
@@ -11,7 +12,6 @@ export function createApp(db?: StrimulatorDB) {
     .use(apiKeyAuth)
     .use(requestLogger)
     .onError(({ error, set }) => {
-      // Pass through Response objects thrown by middleware (e.g. auth rejections)
       if (error instanceof Response) {
         return error;
       }
@@ -21,7 +21,6 @@ export function createApp(db?: StrimulatorDB) {
         return error.body;
       }
 
-      // Unknown errors → generic api_error shape
       set.status = 500;
       return {
         error: {
@@ -38,5 +37,6 @@ export function createApp(db?: StrimulatorDB) {
       url: "/v1",
       livemode: false,
     }))
+    .use(customerRoutes(database))
     .decorate("db", database);
 }
