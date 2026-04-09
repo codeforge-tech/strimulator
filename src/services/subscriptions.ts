@@ -380,7 +380,7 @@ export class SubscriptionService {
     return updated;
   }
 
-  cancel(id: string): Stripe.Subscription {
+  cancel(id: string, eventService?: EventService): Stripe.Subscription {
     const row = this.db.select().from(subscriptions).where(eq(subscriptions.id, id)).get();
 
     if (!row) {
@@ -419,6 +419,15 @@ export class SubscriptionService {
       })
       .where(eq(subscriptions.id, id))
       .run();
+
+    // Emit updated event before deleted (matches real Stripe ordering)
+    if (eventService) {
+      eventService.emit(
+        "customer.subscription.updated",
+        updated as unknown as Record<string, unknown>,
+        { status: existing.status },
+      );
+    }
 
     return updated;
   }

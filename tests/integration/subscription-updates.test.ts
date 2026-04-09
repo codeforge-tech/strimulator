@@ -115,4 +115,28 @@ describe("Subscription Updates", () => {
     expect((latest.data.object as any).id).toBe(sub.id);
     expect(latest.data.previous_attributes).toBeDefined();
   });
+
+  test("cancel emits customer.subscription.updated before deleted", async () => {
+    const { sub } = await createSubWithPrice(1000);
+
+    await stripe.subscriptions.cancel(sub.id);
+
+    const updatedEvents = await stripe.events.list({
+      type: "customer.subscription.updated",
+      limit: 5,
+    });
+    const deletedEvents = await stripe.events.list({
+      type: "customer.subscription.deleted",
+      limit: 5,
+    });
+
+    expect(updatedEvents.data.length).toBeGreaterThanOrEqual(1);
+    expect(deletedEvents.data.length).toBeGreaterThanOrEqual(1);
+
+    const updateEvent = updatedEvents.data.find(
+      (e) => (e.data.object as any).id === sub.id,
+    );
+    expect(updateEvent).toBeDefined();
+    expect(updateEvent!.data.previous_attributes).toBeDefined();
+  });
 });

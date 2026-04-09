@@ -117,7 +117,7 @@ export function subscriptionRoutes(db: StrimulatorDB, eventService?: EventServic
 
     // DELETE /v1/subscriptions/:id — cancel
     .delete("/:id", ({ params: { id } }) => {
-      const canceled = service.cancel(id);
+      const canceled = service.cancel(id, eventService);
       eventService?.emit("customer.subscription.deleted", canceled as unknown as Record<string, unknown>);
       return canceled;
     });
