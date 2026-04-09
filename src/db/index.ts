@@ -107,6 +107,90 @@ export function createDB(path: string = ":memory:") {
     )
   `);
 
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS subscriptions (
+      id TEXT PRIMARY KEY,
+      customer_id TEXT NOT NULL,
+      status TEXT NOT NULL,
+      current_period_start INTEGER NOT NULL,
+      current_period_end INTEGER NOT NULL,
+      test_clock_id TEXT,
+      created INTEGER NOT NULL,
+      data TEXT NOT NULL
+    )
+  `);
+
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS subscription_items (
+      id TEXT PRIMARY KEY,
+      subscription_id TEXT NOT NULL,
+      price_id TEXT NOT NULL,
+      quantity INTEGER NOT NULL DEFAULT 1,
+      created INTEGER NOT NULL,
+      data TEXT NOT NULL
+    )
+  `);
+
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS invoices (
+      id TEXT PRIMARY KEY,
+      customer_id TEXT NOT NULL,
+      subscription_id TEXT,
+      status TEXT NOT NULL,
+      amount_due INTEGER NOT NULL,
+      amount_paid INTEGER NOT NULL DEFAULT 0,
+      currency TEXT NOT NULL,
+      payment_intent_id TEXT,
+      created INTEGER NOT NULL,
+      data TEXT NOT NULL
+    )
+  `);
+
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS events (
+      id TEXT PRIMARY KEY,
+      type TEXT NOT NULL,
+      api_version TEXT NOT NULL,
+      created INTEGER NOT NULL,
+      data TEXT NOT NULL
+    )
+  `);
+
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS webhook_endpoints (
+      id TEXT PRIMARY KEY,
+      url TEXT NOT NULL,
+      secret TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'enabled',
+      enabled_events TEXT NOT NULL,
+      created INTEGER NOT NULL,
+      data TEXT NOT NULL
+    )
+  `);
+
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS webhook_deliveries (
+      id TEXT PRIMARY KEY,
+      event_id TEXT NOT NULL,
+      endpoint_id TEXT NOT NULL,
+      status TEXT NOT NULL,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      next_retry_at INTEGER,
+      created INTEGER NOT NULL
+    )
+  `);
+
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS test_clocks (
+      id TEXT PRIMARY KEY,
+      frozen_time INTEGER NOT NULL,
+      status TEXT NOT NULL DEFAULT 'ready',
+      name TEXT,
+      created INTEGER NOT NULL,
+      data TEXT NOT NULL
+    )
+  `);
+
   return db;
 }
 

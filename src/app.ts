@@ -11,6 +11,8 @@ import { paymentMethodRoutes } from "./routes/payment-methods";
 import { chargeRoutes } from "./routes/charges";
 import { refundRoutes } from "./routes/refunds";
 import { setupIntentRoutes } from "./routes/setup-intents";
+import { subscriptionRoutes } from "./routes/subscriptions";
+import { invoiceRoutes } from "./routes/invoices";
 
 export function createApp(db?: StrimulatorDB) {
   const database = db ?? createDB();
@@ -52,5 +54,7 @@ export function createApp(db?: StrimulatorDB) {
     .use(chargeRoutes(database))
     .use(refundRoutes(database))
     .use(setupIntentRoutes(database))
+    .use(subscriptionRoutes(database))
+    .use(invoiceRoutes(database))
     .decorate("db", database);
 }
