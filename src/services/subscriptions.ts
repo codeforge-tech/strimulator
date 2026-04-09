@@ -7,6 +7,7 @@ import { now } from "../lib/timestamps";
 import { buildListResponse, type ListParams, type ListResponse } from "../lib/pagination";
 import { parseSearchQuery, matchesCondition, buildSearchResult, type SearchResult } from "../lib/search";
 import { resourceNotFoundError, invalidRequestError, stateTransitionError } from "../errors";
+import type { EventService } from "./events";
 import type { InvoiceService } from "./invoices";
 import type { PriceService } from "./prices";
 
@@ -26,6 +27,14 @@ export interface CreateSubscriptionParams {
 
 export interface ListSubscriptionParams extends ListParams {
   customerId?: string;
+}
+
+export interface UpdateSubscriptionParams {
+  items?: Array<{ id?: string; price: string; quantity?: number }>;
+  cancel_at_period_end?: boolean;
+  trial_end?: "now" | number;
+  metadata?: Record<string, string>;
+  proration_behavior?: "create_prorations" | "none" | "always_invoice";
 }
 
 function buildSubscriptionItemShape(
@@ -205,6 +214,170 @@ export class SubscriptionService {
     }
 
     return JSON.parse(row.data as string) as Stripe.Subscription;
+  }
+
+  update(id: string, params: UpdateSubscriptionParams, eventService?: EventService): Stripe.Subscription {
+    const row = this.db.select().from(subscriptions).where(eq(subscriptions.id, id)).get();
+
+    if (!row) {
+      throw resourceNotFoundError("subscription", id);
+    }
+
+    const existing = JSON.parse(row.data as string) as Stripe.Subscription;
+
+    if (existing.status === "canceled") {
+      throw stateTransitionError("subscription", id, existing.status, "update");
+    }
+
+    const previousAttributes: Record<string, unknown> = {};
+
+    // --- Handle items update ---
+    let updatedItems = (existing.items as Stripe.ApiList<Stripe.SubscriptionItem>).data.slice();
+
+    if (params.items && params.items.length > 0) {
+      previousAttributes.items = {
+        object: "list",
+        data: updatedItems.map(i => ({ ...i })),
+      };
+
+      const existingItems = updatedItems.slice();
+      const touchedIds = new Set<string>();
+
+      for (const itemParam of params.items) {
+        const price = this.priceService.retrieve(itemParam.price);
+        const quantity = itemParam.quantity ?? 1;
+
+        if (itemParam.id) {
+          // Update existing item by id
+          touchedIds.add(itemParam.id);
+          const idx = updatedItems.findIndex(i => i.id === itemParam.id);
+          if (idx !== -1) {
+            const itemShape = buildSubscriptionItemShape(itemParam.id, updatedItems[idx].created, id, price, quantity);
+            updatedItems[idx] = itemShape;
+
+            // Update in DB
+            this.db.update(subscriptionItems)
+              .set({
+                priceId: itemParam.price,
+                quantity,
+                data: JSON.stringify(itemShape),
+              })
+              .where(eq(subscriptionItems.id, itemParam.id))
+              .run();
+          }
+        } else if (existingItems.length === 1 && params.items.length === 1) {
+          // Single-plan upgrade: replace the only existing item
+          const existingItem = existingItems[0];
+          touchedIds.add(existingItem.id);
+          const itemShape = buildSubscriptionItemShape(existingItem.id, existingItem.created, id, price, quantity);
+          updatedItems = [itemShape];
+
+          this.db.update(subscriptionItems)
+            .set({
+              priceId: itemParam.price,
+              quantity,
+              data: JSON.stringify(itemShape),
+            })
+            .where(eq(subscriptionItems.id, existingItem.id))
+            .run();
+        } else {
+          // Add new item
+          const newItemId = generateId("subscription_item");
+          const createdAt = now();
+          const itemShape = buildSubscriptionItemShape(newItemId, createdAt, id, price, quantity);
+          updatedItems.push(itemShape);
+
+          this.db.insert(subscriptionItems).values({
+            id: newItemId,
+            subscriptionId: id,
+            priceId: itemParam.price,
+            quantity,
+            created: createdAt,
+            data: JSON.stringify(itemShape),
+          }).run();
+        }
+      }
+    }
+
+    // --- Handle cancel_at_period_end ---
+    let cancelAtPeriodEnd = existing.cancel_at_period_end;
+    let cancelAt = (existing as any).cancel_at as number | null;
+
+    if (params.cancel_at_period_end !== undefined) {
+      if (params.cancel_at_period_end !== existing.cancel_at_period_end) {
+        previousAttributes.cancel_at_period_end = existing.cancel_at_period_end;
+      }
+      cancelAtPeriodEnd = params.cancel_at_period_end;
+      if (params.cancel_at_period_end) {
+        cancelAt = (existing as any).current_period_end;
+        if ((existing as any).cancel_at !== cancelAt) {
+          previousAttributes.cancel_at = (existing as any).cancel_at;
+        }
+      } else {
+        if ((existing as any).cancel_at !== null) {
+          previousAttributes.cancel_at = (existing as any).cancel_at;
+        }
+        cancelAt = null;
+      }
+    }
+
+    // --- Handle trial_end ---
+    let trialEnd = existing.trial_end as number | null;
+    let status = existing.status;
+
+    if (params.trial_end !== undefined) {
+      previousAttributes.trial_end = existing.trial_end;
+      if (params.trial_end === "now") {
+        trialEnd = now();
+        status = "active";
+        previousAttributes.status = existing.status;
+      } else {
+        trialEnd = params.trial_end as number;
+      }
+    }
+
+    // --- Handle metadata ---
+    let metadata = (existing.metadata ?? {}) as Record<string, string>;
+
+    if (params.metadata !== undefined) {
+      previousAttributes.metadata = { ...metadata };
+      metadata = { ...metadata, ...params.metadata };
+    }
+
+    // --- Rebuild and persist ---
+    const updated = buildSubscriptionShape(id, existing.created, {
+      customer: existing.customer as string,
+      status,
+      currency: existing.currency,
+      current_period_start: (existing as any).current_period_start,
+      current_period_end: (existing as any).current_period_end,
+      trial_start: existing.trial_start,
+      trial_end: trialEnd,
+      items: updatedItems,
+      metadata,
+      canceled_at: (existing as any).canceled_at,
+      ended_at: (existing as any).ended_at,
+      cancel_at: cancelAt,
+      cancel_at_period_end: cancelAtPeriodEnd,
+      latest_invoice: existing.latest_invoice as string | null,
+    });
+
+    this.db.update(subscriptions)
+      .set({
+        status,
+        data: JSON.stringify(updated),
+      })
+      .where(eq(subscriptions.id, id))
+      .run();
+
+    // Emit event
+    eventService?.emit(
+      "customer.subscription.updated",
+      updated as unknown as Record<string, unknown>,
+      previousAttributes,
+    );
+
+    return updated;
   }
 
   cancel(id: string): Stripe.Subscription {
