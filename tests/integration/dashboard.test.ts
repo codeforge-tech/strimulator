@@ -1,7 +1,9 @@
-import { describe, it, expect } from "bun:test";
+import { describe, it, expect, beforeEach } from "bun:test";
 import { Elysia } from "elysia";
 import { createDB, getRawSqlite } from "../../src/db";
 import { dashboardServer } from "../../src/dashboard/server";
+import { actionFlags } from "../../src/dashboard/api";
+import { TestClockService } from "../../src/services/test-clocks";
 
 function createTestApp() {
   const db = createDB(":memory:");
@@ -229,5 +231,150 @@ describe("Dashboard Resource Explorer API", () => {
     expect(body).toHaveProperty("data");
     expect(body).toHaveProperty("total");
     expect(Array.isArray(body.data)).toBe(true);
+  });
+});
+
+describe("Dashboard Actions API", () => {
+  beforeEach(() => {
+    // Reset the action flag between tests
+    actionFlags.failNextPayment = null;
+  });
+
+  it("POST /dashboard/api/actions/fail-next-payment returns 200 with default error code", async () => {
+    const app = createTestApp();
+    const res = await app.handle(
+      new Request("http://localhost/dashboard/api/actions/fail-next-payment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    const body = await jsonResponse(res);
+    expect(body.ok).toBe(true);
+    expect(body.error_code).toBe("card_declined");
+    expect(actionFlags.failNextPayment).toBe("card_declined");
+  });
+
+  it("POST /dashboard/api/actions/fail-next-payment accepts a custom error code", async () => {
+    const app = createTestApp();
+    const res = await app.handle(
+      new Request("http://localhost/dashboard/api/actions/fail-next-payment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ error_code: "insufficient_funds" }),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    const body = await jsonResponse(res);
+    expect(body.ok).toBe(true);
+    expect(body.error_code).toBe("insufficient_funds");
+    expect(actionFlags.failNextPayment).toBe("insufficient_funds");
+  });
+
+  it("POST /dashboard/api/actions/advance-clock with valid clock returns 200", async () => {
+    const db = createDB(":memory:");
+    const app = new Elysia().use(dashboardServer(db));
+
+    // Create a test clock using the service (to handle the mode: "json" data column correctly)
+    const clockService = new TestClockService(db);
+    const frozenTime = Math.floor(Date.now() / 1000) + 1000;
+    const clock = clockService.create({ frozen_time: frozenTime, name: "Test Clock" });
+
+    const newFrozenTime = frozenTime + 86400; // advance by 1 day
+    const res = await app.handle(
+      new Request("http://localhost/dashboard/api/actions/advance-clock", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clock_id: clock.id, frozen_time: newFrozenTime }),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    const body = await jsonResponse(res);
+    expect(body.ok).toBe(true);
+    expect(body.test_clock).toBeDefined();
+    expect(body.test_clock.frozen_time).toBe(newFrozenTime);
+  });
+
+  it("POST /dashboard/api/actions/advance-clock returns 400 when clock_id is missing", async () => {
+    const app = createTestApp();
+    const res = await app.handle(
+      new Request("http://localhost/dashboard/api/actions/advance-clock", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ frozen_time: 9999999999 }),
+      }),
+    );
+
+    expect(res.status).toBe(400);
+  });
+
+  it("POST /dashboard/api/actions/expire-payment-intent with valid PI returns 200", async () => {
+    const db = createDB(":memory:");
+    const sqlite = getRawSqlite(db);
+    const app = new Elysia().use(dashboardServer(db));
+
+    // Insert a payment intent directly
+    const piId = "pi_test_expire";
+    const createdAt = Math.floor(Date.now() / 1000);
+    const clientSecret = `${piId}_secret_abc123`;
+    const piData = {
+      id: piId,
+      object: "payment_intent",
+      amount: 2000,
+      currency: "usd",
+      status: "requires_payment_method",
+      client_secret: clientSecret,
+      capture_method: "automatic",
+      created: createdAt,
+      customer: null,
+      payment_method: null,
+    };
+    sqlite.query(
+      `INSERT INTO payment_intents (id, customer_id, payment_method_id, status, amount, currency, client_secret, capture_method, created, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(piId, null, null, "requires_payment_method", 2000, "usd", clientSecret, "automatic", createdAt, JSON.stringify(piData));
+
+    const res = await app.handle(
+      new Request("http://localhost/dashboard/api/actions/expire-payment-intent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ payment_intent_id: piId }),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    const body = await jsonResponse(res);
+    expect(body.ok).toBe(true);
+    expect(body.payment_intent.status).toBe("canceled");
+    expect(body.payment_intent.cancellation_reason).toBe("expired");
+  });
+
+  it("POST /dashboard/api/actions/expire-payment-intent returns 404 for unknown PI", async () => {
+    const app = createTestApp();
+    const res = await app.handle(
+      new Request("http://localhost/dashboard/api/actions/expire-payment-intent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ payment_intent_id: "pi_doesnotexist" }),
+      }),
+    );
+
+    expect(res.status).toBe(404);
+  });
+
+  it("POST /dashboard/api/actions/expire-payment-intent returns 400 when payment_intent_id is missing", async () => {
+    const app = createTestApp();
+    const res = await app.handle(
+      new Request("http://localhost/dashboard/api/actions/expire-payment-intent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      }),
+    );
+
+    expect(res.status).toBe(400);
   });
 });
