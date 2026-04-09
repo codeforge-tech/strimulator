@@ -6,9 +6,8 @@ import { parseStripeBody } from "../middleware/form-parser";
 import { parseListParams } from "../lib/pagination";
 import { StripeError } from "../errors";
 
-export function customerRoutes(db: StrimulatorDB) {
+export function customerRoutes(db: StrimulatorDB, eventService?: EventService) {
   const service = new CustomerService(db);
-  const eventService = new EventService(db);
 
   return new Elysia({ prefix: "/v1/customers" })
     .onError(({ error, set }) => {
@@ -23,7 +22,7 @@ export function customerRoutes(db: StrimulatorDB) {
       const rawBody = await request.text();
       const params = parseStripeBody(rawBody);
       const customer = service.create(params);
-      eventService.emit("customer.created", customer as unknown as Record<string, unknown>);
+      eventService?.emit("customer.created", customer as unknown as Record<string, unknown>);
       return customer;
     })
 
@@ -42,11 +41,15 @@ export function customerRoutes(db: StrimulatorDB) {
     .post("/:id", async ({ params: { id }, request }) => {
       const rawBody = await request.text();
       const params = parseStripeBody(rawBody);
-      return service.update(id, params);
+      const updated = service.update(id, params);
+      eventService?.emit("customer.updated", updated as unknown as Record<string, unknown>);
+      return updated;
     })
 
     // DELETE /v1/customers/:id — delete
     .delete("/:id", ({ params: { id } }) => {
-      return service.del(id);
+      const deleted = service.del(id);
+      eventService?.emit("customer.deleted", deleted as unknown as Record<string, unknown>);
+      return deleted;
     });
 }

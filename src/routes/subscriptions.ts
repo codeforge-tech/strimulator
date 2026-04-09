@@ -3,11 +3,12 @@ import type { StrimulatorDB } from "../db";
 import { SubscriptionService } from "../services/subscriptions";
 import { InvoiceService } from "../services/invoices";
 import { PriceService } from "../services/prices";
+import { EventService } from "../services/events";
 import { parseStripeBody } from "../middleware/form-parser";
 import { parseListParams } from "../lib/pagination";
 import { StripeError } from "../errors";
 
-export function subscriptionRoutes(db: StrimulatorDB) {
+export function subscriptionRoutes(db: StrimulatorDB, eventService?: EventService) {
   const invoiceService = new InvoiceService(db);
   const priceService = new PriceService(db);
   const service = new SubscriptionService(db, invoiceService, priceService);
@@ -38,7 +39,9 @@ export function subscriptionRoutes(db: StrimulatorDB) {
         params.trial_period_days = parseInt(params.trial_period_days, 10);
       }
 
-      return service.create(params);
+      const sub = service.create(params);
+      eventService?.emit("customer.subscription.created", sub as unknown as Record<string, unknown>);
+      return sub;
     })
 
     // GET /v1/subscriptions — list
@@ -58,6 +61,8 @@ export function subscriptionRoutes(db: StrimulatorDB) {
 
     // DELETE /v1/subscriptions/:id — cancel
     .delete("/:id", ({ params: { id } }) => {
-      return service.cancel(id);
+      const canceled = service.cancel(id);
+      eventService?.emit("customer.subscription.deleted", canceled as unknown as Record<string, unknown>);
+      return canceled;
     });
 }

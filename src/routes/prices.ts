@@ -1,11 +1,12 @@
 import { Elysia } from "elysia";
 import type { StrimulatorDB } from "../db";
 import { PriceService } from "../services/prices";
+import { EventService } from "../services/events";
 import { parseStripeBody } from "../middleware/form-parser";
 import { parseListParams } from "../lib/pagination";
 import { StripeError } from "../errors";
 
-export function priceRoutes(db: StrimulatorDB) {
+export function priceRoutes(db: StrimulatorDB, eventService?: EventService) {
   const service = new PriceService(db);
 
   return new Elysia({ prefix: "/v1/prices" })
@@ -32,7 +33,9 @@ export function priceRoutes(db: StrimulatorDB) {
       if (params.recurring && typeof params.recurring.interval_count === "string") {
         params.recurring.interval_count = parseInt(params.recurring.interval_count, 10);
       }
-      return service.create(params);
+      const price = service.create(params);
+      eventService?.emit("price.created", price as unknown as Record<string, unknown>);
+      return price;
     })
 
     // GET /v1/prices — list
@@ -55,6 +58,8 @@ export function priceRoutes(db: StrimulatorDB) {
       if (typeof params.active === "string") {
         params.active = params.active !== "false";
       }
-      return service.update(id, params);
+      const updated = service.update(id, params);
+      eventService?.emit("price.updated", updated as unknown as Record<string, unknown>);
+      return updated;
     });
 }

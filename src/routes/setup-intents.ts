@@ -2,11 +2,12 @@ import { Elysia } from "elysia";
 import type { StrimulatorDB } from "../db";
 import { SetupIntentService } from "../services/setup-intents";
 import { PaymentMethodService } from "../services/payment-methods";
+import { EventService } from "../services/events";
 import { parseStripeBody } from "../middleware/form-parser";
 import { parseListParams } from "../lib/pagination";
 import { StripeError } from "../errors";
 
-export function setupIntentRoutes(db: StrimulatorDB) {
+export function setupIntentRoutes(db: StrimulatorDB, eventService?: EventService) {
   const pmService = new PaymentMethodService(db);
   const service = new SetupIntentService(db, pmService);
 
@@ -22,12 +23,14 @@ export function setupIntentRoutes(db: StrimulatorDB) {
     .post("/", async ({ request }) => {
       const rawBody = await request.text();
       const params = parseStripeBody(rawBody);
-      return service.create({
+      const si = service.create({
         customer: params.customer as string | undefined,
         payment_method: params.payment_method as string | undefined,
         confirm: params.confirm === "true" || params.confirm === true,
         metadata: params.metadata as Record<string, string> | undefined,
       });
+      eventService?.emit("setup_intent.created", si as unknown as Record<string, unknown>);
+      return si;
     })
 
     // GET /v1/setup_intents — list
@@ -45,9 +48,11 @@ export function setupIntentRoutes(db: StrimulatorDB) {
     .post("/:id/confirm", async ({ params: { id }, request }) => {
       const rawBody = await request.text();
       const params = parseStripeBody(rawBody);
-      return service.confirm(id, {
+      const confirmed = service.confirm(id, {
         payment_method: params.payment_method as string | undefined,
       });
+      eventService?.emit("setup_intent.succeeded", confirmed as unknown as Record<string, unknown>);
+      return confirmed;
     })
 
     // POST /v1/setup_intents/:id/cancel — cancel

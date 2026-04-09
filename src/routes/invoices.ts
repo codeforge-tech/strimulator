@@ -1,11 +1,12 @@
 import { Elysia } from "elysia";
 import type { StrimulatorDB } from "../db";
 import { InvoiceService } from "../services/invoices";
+import { EventService } from "../services/events";
 import { parseStripeBody } from "../middleware/form-parser";
 import { parseListParams } from "../lib/pagination";
 import { StripeError } from "../errors";
 
-export function invoiceRoutes(db: StrimulatorDB) {
+export function invoiceRoutes(db: StrimulatorDB, eventService?: EventService) {
   const service = new InvoiceService(db);
 
   return new Elysia({ prefix: "/v1/invoices" })
@@ -25,7 +26,9 @@ export function invoiceRoutes(db: StrimulatorDB) {
         params.amount_due = parseInt(params.amount_due, 10);
       }
 
-      return service.create(params);
+      const invoice = service.create(params);
+      eventService?.emit("invoice.created", invoice as unknown as Record<string, unknown>);
+      return invoice;
     })
 
     // GET /v1/invoices — list
@@ -46,12 +49,16 @@ export function invoiceRoutes(db: StrimulatorDB) {
 
     // POST /v1/invoices/:id/finalize — finalize
     .post("/:id/finalize", ({ params: { id } }) => {
-      return service.finalizeInvoice(id);
+      const finalized = service.finalizeInvoice(id);
+      eventService?.emit("invoice.finalized", finalized as unknown as Record<string, unknown>);
+      return finalized;
     })
 
     // POST /v1/invoices/:id/pay — pay
     .post("/:id/pay", ({ params: { id } }) => {
-      return service.pay(id);
+      const paid = service.pay(id);
+      eventService?.emit("invoice.paid", paid as unknown as Record<string, unknown>);
+      return paid;
     })
 
     // POST /v1/invoices/:id/void — void

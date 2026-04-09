@@ -2,11 +2,12 @@ import { Elysia } from "elysia";
 import type { StrimulatorDB } from "../db";
 import { RefundService } from "../services/refunds";
 import { ChargeService } from "../services/charges";
+import { EventService } from "../services/events";
 import { parseStripeBody } from "../middleware/form-parser";
 import { parseListParams } from "../lib/pagination";
 import { StripeError } from "../errors";
 
-export function refundRoutes(db: StrimulatorDB) {
+export function refundRoutes(db: StrimulatorDB, eventService?: EventService) {
   const chargeService = new ChargeService(db);
   const service = new RefundService(db, chargeService);
 
@@ -22,7 +23,9 @@ export function refundRoutes(db: StrimulatorDB) {
     .post("/", async ({ request }) => {
       const rawBody = await request.text();
       const params = parseStripeBody(rawBody);
-      return service.create(params);
+      const refund = service.create(params);
+      eventService?.emit("refund.created", refund as unknown as Record<string, unknown>);
+      return refund;
     })
 
     // GET /v1/refunds — list

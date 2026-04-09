@@ -1,11 +1,12 @@
 import { Elysia } from "elysia";
 import type { StrimulatorDB } from "../db";
 import { PaymentMethodService } from "../services/payment-methods";
+import { EventService } from "../services/events";
 import { parseStripeBody } from "../middleware/form-parser";
 import { parseListParams } from "../lib/pagination";
 import { StripeError } from "../errors";
 
-export function paymentMethodRoutes(db: StrimulatorDB) {
+export function paymentMethodRoutes(db: StrimulatorDB, eventService?: EventService) {
   const service = new PaymentMethodService(db);
 
   return new Elysia({ prefix: "/v1/payment_methods" })
@@ -20,7 +21,9 @@ export function paymentMethodRoutes(db: StrimulatorDB) {
     .post("/", async ({ request }) => {
       const rawBody = await request.text();
       const params = parseStripeBody(rawBody);
-      return service.create(params);
+      const pm = service.create(params);
+      eventService?.emit("payment_method.created", pm as unknown as Record<string, unknown>);
+      return pm;
     })
 
     // GET /v1/payment_methods — list
@@ -43,11 +46,15 @@ export function paymentMethodRoutes(db: StrimulatorDB) {
     .post("/:id/attach", async ({ params: { id }, request }) => {
       const rawBody = await request.text();
       const params = parseStripeBody(rawBody);
-      return service.attach(id, params.customer);
+      const attached = service.attach(id, params.customer);
+      eventService?.emit("payment_method.attached", attached as unknown as Record<string, unknown>);
+      return attached;
     })
 
     // POST /v1/payment_methods/:id/detach — detach from customer
     .post("/:id/detach", ({ params: { id } }) => {
-      return service.detach(id);
+      const detached = service.detach(id);
+      eventService?.emit("payment_method.detached", detached as unknown as Record<string, unknown>);
+      return detached;
     });
 }

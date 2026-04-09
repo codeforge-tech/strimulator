@@ -1,11 +1,12 @@
 import { Elysia } from "elysia";
 import type { StrimulatorDB } from "../db";
 import { ProductService } from "../services/products";
+import { EventService } from "../services/events";
 import { parseStripeBody } from "../middleware/form-parser";
 import { parseListParams } from "../lib/pagination";
 import { StripeError } from "../errors";
 
-export function productRoutes(db: StrimulatorDB) {
+export function productRoutes(db: StrimulatorDB, eventService?: EventService) {
   const service = new ProductService(db);
 
   return new Elysia({ prefix: "/v1/products" })
@@ -24,7 +25,9 @@ export function productRoutes(db: StrimulatorDB) {
       if (typeof params.active === "string") {
         params.active = params.active !== "false";
       }
-      return service.create(params);
+      const product = service.create(params);
+      eventService?.emit("product.created", product as unknown as Record<string, unknown>);
+      return product;
     })
 
     // GET /v1/products — list
@@ -46,11 +49,15 @@ export function productRoutes(db: StrimulatorDB) {
       if (typeof params.active === "string") {
         params.active = params.active !== "false";
       }
-      return service.update(id, params);
+      const updated = service.update(id, params);
+      eventService?.emit("product.updated", updated as unknown as Record<string, unknown>);
+      return updated;
     })
 
     // DELETE /v1/products/:id — delete
     .delete("/:id", ({ params: { id } }) => {
-      return service.del(id);
+      const deleted = service.del(id);
+      eventService?.emit("product.deleted", deleted as unknown as Record<string, unknown>);
+      return deleted;
     });
 }

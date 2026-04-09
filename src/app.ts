@@ -17,9 +17,20 @@ import { eventRoutes } from "./routes/events";
 import { webhookEndpointRoutes } from "./routes/webhook-endpoints";
 import { testClockRoutes } from "./routes/test-clocks";
 import { dashboardServer } from "./dashboard/server";
+import { EventService } from "./services/events";
+import { WebhookEndpointService } from "./services/webhook-endpoints";
+import { WebhookDeliveryService } from "./services/webhook-delivery";
 
 export function createApp(db?: StrimulatorDB) {
   const database = db ?? createDB();
+
+  // Shared service container
+  const eventService = new EventService(database);
+  const endpointService = new WebhookEndpointService(database);
+  const deliveryService = new WebhookDeliveryService(database, endpointService);
+
+  // Wire event delivery
+  eventService.onEvent((event) => deliveryService.deliver(event));
 
   return new Elysia()
     .use(apiKeyAuth)
@@ -50,16 +61,16 @@ export function createApp(db?: StrimulatorDB) {
       url: "/v1",
       livemode: false,
     }))
-    .use(customerRoutes(database))
-    .use(productRoutes(database))
-    .use(priceRoutes(database))
-    .use(paymentIntentRoutes(database))
-    .use(paymentMethodRoutes(database))
+    .use(customerRoutes(database, eventService))
+    .use(productRoutes(database, eventService))
+    .use(priceRoutes(database, eventService))
+    .use(paymentIntentRoutes(database, eventService))
+    .use(paymentMethodRoutes(database, eventService))
     .use(chargeRoutes(database))
-    .use(refundRoutes(database))
-    .use(setupIntentRoutes(database))
-    .use(subscriptionRoutes(database))
-    .use(invoiceRoutes(database))
+    .use(refundRoutes(database, eventService))
+    .use(setupIntentRoutes(database, eventService))
+    .use(subscriptionRoutes(database, eventService))
+    .use(invoiceRoutes(database, eventService))
     .use(eventRoutes(database))
     .use(webhookEndpointRoutes(database))
     .use(testClockRoutes(database))
