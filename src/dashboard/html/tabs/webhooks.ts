@@ -75,6 +75,7 @@ export const WEBHOOKS_TAB = `
       }
 
       useEffect(() => {
+        setDelOffset(0);
         loadDeliveries(0);
       }, [endpoint.id]);
 
@@ -230,6 +231,7 @@ export const WEBHOOKS_TAB = `
       const [newUrl, setNewUrl] = useState('');
       const [newEvents, setNewEvents] = useState('*');
       const [creating, setCreating] = useState(false);
+      const [createMsg, setCreateMsg] = useState('');
       const [selectedEp, setSelectedEp] = useState(null);
 
       // Unified delivery log state
@@ -271,6 +273,7 @@ export const WEBHOOKS_TAB = `
 
       async function createEndpoint() {
         setCreating(true);
+        setCreateMsg('');
         try {
           const events = newEvents.split(',').map(s => s.trim()).filter(Boolean);
           const res = await fetch('/dashboard/api/webhooks', {
@@ -283,22 +286,30 @@ export const WEBHOOKS_TAB = `
             setNewEvents('*');
             setShowCreate(false);
             loadEndpoints();
+          } else {
+            const data = await res.json().catch(() => ({}));
+            setCreateMsg('Error: ' + (data.error ?? data.message ?? 'Failed to create endpoint.'));
           }
         } catch (e) {
           console.error('Failed to create endpoint', e);
+          setCreateMsg('Request failed: ' + e.message);
         } finally {
           setCreating(false);
         }
       }
 
       async function deleteEndpoint(id) {
+        if (!confirm('Delete this webhook endpoint? This cannot be undone.')) return;
         try {
           const res = await fetch(\`/dashboard/api/webhooks/\${id}\`, { method: 'DELETE' });
           if (res.ok) {
             loadEndpoints();
+          } else {
+            alert('Failed to delete endpoint.');
           }
         } catch (e) {
           console.error('Failed to delete endpoint', e);
+          alert('Failed to delete endpoint: ' + e.message);
         }
       }
 
@@ -358,6 +369,7 @@ export const WEBHOOKS_TAB = `
               <label>URL<input type="text" placeholder="https://example.com/webhook" value=\${newUrl} onInput=\${(e) => setNewUrl(e.target.value)} /></label>
               <label>Enabled events (comma-separated, default *)<input type="text" placeholder="*" value=\${newEvents} onInput=\${(e) => setNewEvents(e.target.value)} /></label>
               <button aria-busy=\${creating} onClick=\${createEndpoint}>Create Endpoint</button>
+              \${createMsg ? html\`<p style="font-size:0.85rem;color:var(--pico-del-color)">\${createMsg}</p>\` : null}
             </div>
           \` : null}
 
