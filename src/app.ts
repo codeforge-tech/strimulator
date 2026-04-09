@@ -16,6 +16,7 @@ import { invoiceRoutes } from "./routes/invoices";
 import { eventRoutes } from "./routes/events";
 import { webhookEndpointRoutes } from "./routes/webhook-endpoints";
 import { testClockRoutes } from "./routes/test-clocks";
+import { dashboardServer } from "./dashboard/server";
 
 export function createApp(db?: StrimulatorDB) {
   const database = db ?? createDB();
@@ -62,5 +63,6 @@ export function createApp(db?: StrimulatorDB) {
     .use(eventRoutes(database))
     .use(webhookEndpointRoutes(database))
     .use(testClockRoutes(database))
+    .use(dashboardServer(database))
     .decorate("db", database);
 }
