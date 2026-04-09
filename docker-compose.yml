@@ -1,0 +1,13 @@
+services:
+  strimulator:
+    build: .
+    ports:
+      - "12111:12111"
+    volumes:
+      - strimulator-data:/data
+    environment:
+      STRIMULATOR_PORT: "12111"
+      STRIMULATOR_DB_PATH: "/data/strimulator.db"
+
+volumes:
+  strimulator-data:
