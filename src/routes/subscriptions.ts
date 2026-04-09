@@ -3,10 +3,17 @@ import type { StrimulatorDB } from "../db";
 import { SubscriptionService } from "../services/subscriptions";
 import { InvoiceService } from "../services/invoices";
 import { PriceService } from "../services/prices";
+import { CustomerService } from "../services/customers";
 import { EventService } from "../services/events";
 import { parseStripeBody } from "../middleware/form-parser";
 import { parseListParams } from "../lib/pagination";
+import { applyExpand, type ExpandConfig } from "../lib/expand";
 import { StripeError } from "../errors";
+
+const subscriptionExpandConfig: ExpandConfig = {
+  customer: { resolve: (id, db) => new CustomerService(db).retrieve(id) },
+  latest_invoice: { resolve: (id, db) => new InvoiceService(db).retrieve(id) },
+};
 
 export function subscriptionRoutes(db: StrimulatorDB, eventService?: EventService) {
   const invoiceService = new InvoiceService(db);
@@ -55,8 +62,14 @@ export function subscriptionRoutes(db: StrimulatorDB, eventService?: EventServic
     })
 
     // GET /v1/subscriptions/:id — retrieve
-    .get("/:id", ({ params: { id } }) => {
-      return service.retrieve(id);
+    .get("/:id", async ({ params: { id }, request }) => {
+      const url = new URL(request.url);
+      const expand = url.searchParams.getAll("expand[]");
+      let result: any = service.retrieve(id);
+      if (expand.length) {
+        result = await applyExpand(result, expand, subscriptionExpandConfig, db);
+      }
+      return result;
     })
 
     // DELETE /v1/subscriptions/:id — cancel

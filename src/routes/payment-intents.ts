@@ -3,10 +3,18 @@ import type { StrimulatorDB } from "../db";
 import { ChargeService } from "../services/charges";
 import { PaymentMethodService } from "../services/payment-methods";
 import { PaymentIntentService } from "../services/payment-intents";
+import { CustomerService } from "../services/customers";
 import { EventService } from "../services/events";
 import { parseStripeBody } from "../middleware/form-parser";
 import { parseListParams } from "../lib/pagination";
+import { applyExpand, type ExpandConfig } from "../lib/expand";
 import { StripeError } from "../errors";
+
+const paymentIntentExpandConfig: ExpandConfig = {
+  customer: { resolve: (id, db) => new CustomerService(db).retrieve(id) },
+  payment_method: { resolve: (id, db) => new PaymentMethodService(db).retrieve(id) },
+  latest_charge: { resolve: (id, db) => new ChargeService(db).retrieve(id) },
+};
 
 export function paymentIntentRoutes(db: StrimulatorDB, eventService?: EventService) {
   const chargeService = new ChargeService(db);
@@ -54,8 +62,14 @@ export function paymentIntentRoutes(db: StrimulatorDB, eventService?: EventServi
     })
 
     // GET /v1/payment_intents/:id — retrieve
-    .get("/:id", ({ params: { id } }) => {
-      return service.retrieve(id);
+    .get("/:id", async ({ params: { id }, request }) => {
+      const url = new URL(request.url);
+      const expand = url.searchParams.getAll("expand[]");
+      let result: any = service.retrieve(id);
+      if (expand.length) {
+        result = await applyExpand(result, expand, paymentIntentExpandConfig, db);
+      }
+      return result;
     })
 
     // POST /v1/payment_intents/:id — update (simplified)

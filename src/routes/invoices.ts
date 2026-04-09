@@ -1,10 +1,25 @@
 import { Elysia } from "elysia";
 import type { StrimulatorDB } from "../db";
 import { InvoiceService } from "../services/invoices";
+import { CustomerService } from "../services/customers";
+import { SubscriptionService } from "../services/subscriptions";
+import { PriceService } from "../services/prices";
 import { EventService } from "../services/events";
 import { parseStripeBody } from "../middleware/form-parser";
 import { parseListParams } from "../lib/pagination";
+import { applyExpand, type ExpandConfig } from "../lib/expand";
 import { StripeError } from "../errors";
+
+const invoiceExpandConfig: ExpandConfig = {
+  customer: { resolve: (id, db) => new CustomerService(db).retrieve(id) },
+  subscription: {
+    resolve: (id, db) => {
+      const invoiceService = new InvoiceService(db);
+      const priceService = new PriceService(db);
+      return new SubscriptionService(db, invoiceService, priceService).retrieve(id);
+    },
+  },
+};
 
 export function invoiceRoutes(db: StrimulatorDB, eventService?: EventService) {
   const service = new InvoiceService(db);
@@ -43,8 +58,14 @@ export function invoiceRoutes(db: StrimulatorDB, eventService?: EventService) {
     })
 
     // GET /v1/invoices/:id — retrieve
-    .get("/:id", ({ params: { id } }) => {
-      return service.retrieve(id);
+    .get("/:id", async ({ params: { id }, request }) => {
+      const url = new URL(request.url);
+      const expand = url.searchParams.getAll("expand[]");
+      let result: any = service.retrieve(id);
+      if (expand.length) {
+        result = await applyExpand(result, expand, invoiceExpandConfig, db);
+      }
+      return result;
     })
 
     // POST /v1/invoices/:id/finalize — finalize

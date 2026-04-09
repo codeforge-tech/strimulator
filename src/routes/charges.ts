@@ -1,8 +1,23 @@
 import { Elysia } from "elysia";
 import type { StrimulatorDB } from "../db";
 import { ChargeService } from "../services/charges";
+import { CustomerService } from "../services/customers";
+import { PaymentIntentService } from "../services/payment-intents";
+import { PaymentMethodService } from "../services/payment-methods";
 import { parseListParams } from "../lib/pagination";
+import { applyExpand, type ExpandConfig } from "../lib/expand";
 import { StripeError } from "../errors";
+
+const chargeExpandConfig: ExpandConfig = {
+  customer: { resolve: (id, db) => new CustomerService(db).retrieve(id) },
+  payment_intent: {
+    resolve: (id, db) => {
+      const chargeService = new ChargeService(db);
+      const paymentMethodService = new PaymentMethodService(db);
+      return new PaymentIntentService(db, chargeService, paymentMethodService).retrieve(id);
+    },
+  },
+};
 
 export function chargeRoutes(db: StrimulatorDB) {
   const service = new ChargeService(db);
@@ -26,7 +41,13 @@ export function chargeRoutes(db: StrimulatorDB) {
     })
 
     // GET /v1/charges/:id — retrieve
-    .get("/:id", ({ params: { id } }) => {
-      return service.retrieve(id);
+    .get("/:id", async ({ params: { id }, request }) => {
+      const url = new URL(request.url);
+      const expand = url.searchParams.getAll("expand[]");
+      let result: any = service.retrieve(id);
+      if (expand.length) {
+        result = await applyExpand(result, expand, chargeExpandConfig, db);
+      }
+      return result;
     });
 }
