@@ -379,6 +379,125 @@ describe("expand[] — Invoice", () => {
   });
 });
 
+describe("expand[] — Subscription nested (latest_invoice.payment_intent)", () => {
+  it("GET /:id?expand[]=latest_invoice.payment_intent leaves latest_invoice null when not set", async () => {
+    const app = createTestApp();
+    const customer = await createCustomer(app);
+    const product = await createProduct(app);
+    const price = await createPrice(app, product.id);
+
+    const createRes = await app.handle(
+      new Request("http://localhost/v1/subscriptions", {
+        method: "POST",
+        headers: FORM_HEADER,
+        body: `customer=${customer.id}&items%5B0%5D%5Bprice%5D=${price.id}`,
+      }),
+    );
+    const sub = await json(createRes);
+
+    // latest_invoice is null on a newly created subscription
+    expect(sub.latest_invoice).toBeNull();
+
+    const res = await app.handle(
+      new Request(
+        `http://localhost/v1/subscriptions/${sub.id}?expand%5B%5D=latest_invoice.payment_intent`,
+        { headers: AUTH_HEADER },
+      ),
+    );
+    expect(res.status).toBe(200);
+    const body = await json(res);
+    // latest_invoice is null, so expand should leave it null
+    expect(body.latest_invoice).toBeNull();
+  });
+
+  it("GET /:id?expand[]=latest_invoice still works (non-nested)", async () => {
+    const app = createTestApp();
+    const customer = await createCustomer(app);
+    const product = await createProduct(app);
+    const price = await createPrice(app, product.id);
+
+    const createRes = await app.handle(
+      new Request("http://localhost/v1/subscriptions", {
+        method: "POST",
+        headers: FORM_HEADER,
+        body: `customer=${customer.id}&items%5B0%5D%5Bprice%5D=${price.id}`,
+      }),
+    );
+    const sub = await json(createRes);
+
+    const res = await app.handle(
+      new Request(
+        `http://localhost/v1/subscriptions/${sub.id}?expand%5B%5D=latest_invoice`,
+        { headers: AUTH_HEADER },
+      ),
+    );
+    expect(res.status).toBe(200);
+    const body = await json(res);
+    // latest_invoice is null so expansion is a no-op, field stays null
+    expect(body.latest_invoice).toBeNull();
+    // customer should remain as a string ID (not expanded)
+    expect(body.customer).toBe(customer.id);
+  });
+
+  it("GET /:id can expand both customer and latest_invoice.payment_intent simultaneously", async () => {
+    const app = createTestApp();
+    const customer = await createCustomer(app);
+    const product = await createProduct(app);
+    const price = await createPrice(app, product.id);
+
+    const createRes = await app.handle(
+      new Request("http://localhost/v1/subscriptions", {
+        method: "POST",
+        headers: FORM_HEADER,
+        body: `customer=${customer.id}&items%5B0%5D%5Bprice%5D=${price.id}`,
+      }),
+    );
+    const sub = await json(createRes);
+
+    const res = await app.handle(
+      new Request(
+        `http://localhost/v1/subscriptions/${sub.id}?expand%5B%5D=customer&expand%5B%5D=latest_invoice.payment_intent`,
+        { headers: AUTH_HEADER },
+      ),
+    );
+    expect(res.status).toBe(200);
+    const body = await json(res);
+    // customer should be expanded to a full object
+    expect(typeof body.customer).toBe("object");
+    expect(body.customer.id).toBe(customer.id);
+    expect(body.customer.object).toBe("customer");
+    // latest_invoice is null so it stays null
+    expect(body.latest_invoice).toBeNull();
+  });
+});
+
+describe("expand[] — Invoice payment_intent", () => {
+  it("GET /:id?expand[]=payment_intent leaves payment_intent null when not set", async () => {
+    const app = createTestApp();
+    const customer = await createCustomer(app);
+
+    const createRes = await app.handle(
+      new Request("http://localhost/v1/invoices", {
+        method: "POST",
+        headers: FORM_HEADER,
+        body: `customer=${customer.id}&currency=usd&amount_due=3000`,
+      }),
+    );
+    const invoice = await json(createRes);
+    expect(invoice.payment_intent).toBeNull();
+
+    const res = await app.handle(
+      new Request(`http://localhost/v1/invoices/${invoice.id}?expand%5B%5D=payment_intent`, {
+        headers: AUTH_HEADER,
+      }),
+    );
+    expect(res.status).toBe(200);
+    const body = await json(res);
+    // payment_intent is null, so expand should leave it null
+    expect(body.payment_intent).toBeNull();
+  });
+});
+
 describe("expand[] — Charge", () => {
   it("GET /:id without expand returns payment_intent as string ID", async () => {
     const app = createTestApp();

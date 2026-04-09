@@ -104,4 +104,83 @@ describe("applyExpand", () => {
     expect(receivedId).toBe("cus_abc");
     expect(receivedDb).toBe(mockDb);
   });
+
+  it("expands nested field using dot-notation", async () => {
+    const fullInvoice = { id: "in_1", object: "invoice", payment_intent: "pi_abc" };
+    const fullPi = { id: "pi_abc", object: "payment_intent", amount: 1000 };
+    const obj = { id: "sub_1", latest_invoice: "in_1" };
+
+    const config: ExpandConfig = {
+      latest_invoice: {
+        resolve: (_id, _db) => fullInvoice,
+        nested: {
+          payment_intent: {
+            resolve: (_id, _db) => fullPi,
+          },
+        },
+      },
+    };
+
+    const result = await applyExpand(obj, ["latest_invoice.payment_intent"], config, mockDb);
+    expect(typeof result.latest_invoice).toBe("object");
+    expect(result.latest_invoice.id).toBe("in_1");
+    expect(typeof result.latest_invoice.payment_intent).toBe("object");
+    expect(result.latest_invoice.payment_intent.id).toBe("pi_abc");
+  });
+
+  it("nested expand with unknown nested field leaves inner field as ID", async () => {
+    const fullInvoice = { id: "in_1", object: "invoice", payment_intent: "pi_abc" };
+    const obj = { id: "sub_1", latest_invoice: "in_1" };
+
+    const config: ExpandConfig = {
+      latest_invoice: {
+        resolve: (_id, _db) => fullInvoice,
+        nested: {
+          // no payment_intent here
+        },
+      },
+    };
+
+    const result = await applyExpand(obj, ["latest_invoice.payment_intent"], config, mockDb);
+    // Top-level resolved, but nested field left as string ID
+    expect(typeof result.latest_invoice).toBe("object");
+    expect(result.latest_invoice.id).toBe("in_1");
+    expect(result.latest_invoice.payment_intent).toBe("pi_abc");
+  });
+
+  it("nested expand with no nested config leaves inner field as ID", async () => {
+    const fullInvoice = { id: "in_1", object: "invoice", payment_intent: "pi_abc" };
+    const obj = { id: "sub_1", latest_invoice: "in_1" };
+
+    const config: ExpandConfig = {
+      latest_invoice: {
+        resolve: (_id, _db) => fullInvoice,
+        // no nested config at all
+      },
+    };
+
+    const result = await applyExpand(obj, ["latest_invoice.payment_intent"], config, mockDb);
+    // Top-level resolved, but nested field left as string ID
+    expect(typeof result.latest_invoice).toBe("object");
+    expect(result.latest_invoice.id).toBe("in_1");
+    expect(result.latest_invoice.payment_intent).toBe("pi_abc");
+  });
+
+  it("nested expand: top-level not a string ID leaves field untouched", async () => {
+    const obj = { id: "sub_1", latest_invoice: null };
+
+    const config: ExpandConfig = {
+      latest_invoice: {
+        resolve: (_id, _db) => ({ id: "in_1", object: "invoice" }),
+        nested: {
+          payment_intent: {
+            resolve: (_id, _db) => ({ id: "pi_abc", object: "payment_intent" }),
+          },
+        },
+      },
+    };
+
+    const result = await applyExpand(obj, ["latest_invoice.payment_intent"], config, mockDb);
+    expect(result.latest_invoice).toBeNull();
+  });
 });

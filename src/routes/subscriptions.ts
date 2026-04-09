@@ -4,6 +4,9 @@ import { SubscriptionService } from "../services/subscriptions";
 import { InvoiceService } from "../services/invoices";
 import { PriceService } from "../services/prices";
 import { CustomerService } from "../services/customers";
+import { ChargeService } from "../services/charges";
+import { PaymentMethodService } from "../services/payment-methods";
+import { PaymentIntentService } from "../services/payment-intents";
 import { EventService } from "../services/events";
 import { parseStripeBody } from "../middleware/form-parser";
 import { parseListParams } from "../lib/pagination";
@@ -12,7 +15,15 @@ import { StripeError } from "../errors";
 
 const subscriptionExpandConfig: ExpandConfig = {
   customer: { resolve: (id, db) => new CustomerService(db).retrieve(id) },
-  latest_invoice: { resolve: (id, db) => new InvoiceService(db).retrieve(id) },
+  latest_invoice: {
+    resolve: (id, db) => new InvoiceService(db).retrieve(id),
+    nested: {
+      payment_intent: {
+        resolve: (id, db) =>
+          new PaymentIntentService(db, new ChargeService(db), new PaymentMethodService(db)).retrieve(id),
+      },
+    },
+  },
 };
 
 export function subscriptionRoutes(db: StrimulatorDB, eventService?: EventService) {

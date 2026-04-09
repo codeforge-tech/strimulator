@@ -4,6 +4,9 @@ import { InvoiceService } from "../services/invoices";
 import { CustomerService } from "../services/customers";
 import { SubscriptionService } from "../services/subscriptions";
 import { PriceService } from "../services/prices";
+import { ChargeService } from "../services/charges";
+import { PaymentMethodService } from "../services/payment-methods";
+import { PaymentIntentService } from "../services/payment-intents";
 import { EventService } from "../services/events";
 import { parseStripeBody } from "../middleware/form-parser";
 import { parseListParams } from "../lib/pagination";
@@ -18,6 +21,10 @@ const invoiceExpandConfig: ExpandConfig = {
       const priceService = new PriceService(db);
       return new SubscriptionService(db, invoiceService, priceService).retrieve(id);
     },
+  },
+  payment_intent: {
+    resolve: (id, db) =>
+      new PaymentIntentService(db, new ChargeService(db), new PaymentMethodService(db)).retrieve(id),
   },
 };
 
