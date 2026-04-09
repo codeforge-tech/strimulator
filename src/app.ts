@@ -13,6 +13,9 @@ import { refundRoutes } from "./routes/refunds";
 import { setupIntentRoutes } from "./routes/setup-intents";
 import { subscriptionRoutes } from "./routes/subscriptions";
 import { invoiceRoutes } from "./routes/invoices";
+import { eventRoutes } from "./routes/events";
+import { webhookEndpointRoutes } from "./routes/webhook-endpoints";
+import { testClockRoutes } from "./routes/test-clocks";
 
 export function createApp(db?: StrimulatorDB) {
   const database = db ?? createDB();
@@ -56,5 +59,8 @@ export function createApp(db?: StrimulatorDB) {
     .use(setupIntentRoutes(database))
     .use(subscriptionRoutes(database))
     .use(invoiceRoutes(database))
+    .use(eventRoutes(database))
+    .use(webhookEndpointRoutes(database))
+    .use(testClockRoutes(database))
     .decorate("db", database);
 }
