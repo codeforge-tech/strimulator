@@ -191,7 +191,14 @@ export function createDB(path: string = ":memory:") {
     )
   `);
 
+  // Attach the raw sqlite instance for dashboard raw SQL access
+  (db as any).__sqlite = sqlite;
+
   return db;
 }
 
 export type StrimulatorDB = ReturnType<typeof createDB>;
+
+export function getRawSqlite(db: StrimulatorDB): import("bun:sqlite").Database {
+  return (db as any).__sqlite;
+}
