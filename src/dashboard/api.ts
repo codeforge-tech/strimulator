@@ -141,6 +141,7 @@ export function dashboardApi(db: StrimulatorDB) {
     })
 
     .get("/stream", () => {
+      let unsubscribeRequest: (() => void) | undefined;
       const stream = new ReadableStream({
         start(controller) {
           const encoder = new TextEncoder();
@@ -154,18 +155,12 @@ export function dashboardApi(db: StrimulatorDB) {
           sendEvent({ type: "connected" });
 
           // Subscribe to globalBus for live updates
-          const unsubscribeRequest = globalBus.on("request", (entry) => {
+          unsubscribeRequest = globalBus.on("request", (entry) => {
             sendEvent({ type: "request", payload: entry });
           });
-
-          // Cleanup when stream closes
-          // Note: ReadableStream cancel is called when consumer disconnects
-          return () => {
-            unsubscribeRequest();
-          };
         },
         cancel() {
-          // Cleanup handled by return value of start
+          unsubscribeRequest?.();
         },
       });
 

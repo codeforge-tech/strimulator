@@ -92,7 +92,13 @@ function buildInvoiceShape(
 }
 
 export class InvoiceService {
-  constructor(private db: StrimulatorDB) {}
+  constructor(private db: StrimulatorDB) {
+    // Initialize counter from existing invoices to avoid duplicates across restarts
+    const rows = db.select().from(invoices).all();
+    if (rows.length > 0) {
+      invoiceCounter = rows.length;
+    }
+  }
 
   create(params: CreateInvoiceParams): Stripe.Invoice {
     if (!params.customer) {

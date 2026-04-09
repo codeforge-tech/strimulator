@@ -6,6 +6,7 @@ import { generateId } from "../lib/id-generator";
 import { now } from "../lib/timestamps";
 import { buildListResponse, type ListParams, type ListResponse } from "../lib/pagination";
 import { parseSearchQuery, matchesCondition, buildSearchResult, type SearchResult } from "../lib/search";
+import { randomBytes } from "crypto";
 import { resourceNotFoundError, invalidRequestError, stateTransitionError, cardError } from "../errors";
 import type { ChargeService } from "./charges";
 import type { PaymentMethodService } from "./payment-methods";
@@ -52,12 +53,7 @@ type PaymentIntentStatus =
 const TERMINAL_STATES: PaymentIntentStatus[] = ["succeeded", "canceled"];
 
 function generateClientSecret(id: string): string {
-  // Generate 16 random chars
-  const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  let secret = "";
-  for (let i = 0; i < 16; i++) {
-    secret += chars[Math.floor(Math.random() * chars.length)];
-  }
+  const secret = randomBytes(12).toString("base64url");
   return `${id}_secret_${secret}`;
 }
 
