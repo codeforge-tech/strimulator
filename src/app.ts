@@ -2,6 +2,7 @@ import { Elysia } from "elysia";
 import { createDB, type StrimulatorDB } from "./db";
 import { apiKeyAuth } from "./middleware/api-key-auth";
 import { requestLogger } from "./middleware/request-logger";
+import { idempotencyMiddleware } from "./middleware/idempotency";
 import { StripeError } from "./errors";
 import { customerRoutes } from "./routes/customers";
 import { productRoutes } from "./routes/products";
@@ -34,6 +35,7 @@ export function createApp(db?: StrimulatorDB) {
 
   return new Elysia()
     .use(apiKeyAuth)
+    .use(idempotencyMiddleware(database))
     .use(requestLogger)
     .onError(({ error, set }) => {
       if (error instanceof Response) {

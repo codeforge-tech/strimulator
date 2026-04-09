@@ -191,6 +191,17 @@ export function createDB(path: string = ":memory:") {
     )
   `);
 
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS idempotency_keys (
+      key TEXT PRIMARY KEY,
+      api_path TEXT NOT NULL,
+      method TEXT NOT NULL,
+      response_code INTEGER NOT NULL,
+      response_body TEXT NOT NULL,
+      created INTEGER NOT NULL
+    )
+  `);
+
   // Attach the raw sqlite instance for dashboard raw SQL access
   (db as any).__sqlite = sqlite;
 
