@@ -6,6 +6,9 @@ import { StripeError } from "./errors";
 import { customerRoutes } from "./routes/customers";
 import { productRoutes } from "./routes/products";
 import { priceRoutes } from "./routes/prices";
+import { paymentIntentRoutes } from "./routes/payment-intents";
+import { paymentMethodRoutes } from "./routes/payment-methods";
+import { chargeRoutes } from "./routes/charges";
 
 export function createApp(db?: StrimulatorDB) {
   const database = db ?? createDB();
@@ -42,5 +45,8 @@ export function createApp(db?: StrimulatorDB) {
     .use(customerRoutes(database))
     .use(productRoutes(database))
     .use(priceRoutes(database))
+    .use(paymentIntentRoutes(database))
+    .use(paymentMethodRoutes(database))
+    .use(chargeRoutes(database))
     .decorate("db", database);
 }
