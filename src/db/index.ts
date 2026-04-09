@@ -82,6 +82,31 @@ export function createDB(path: string = ":memory:") {
     )
   `);
 
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS refunds (
+      id TEXT PRIMARY KEY,
+      charge_id TEXT NOT NULL,
+      payment_intent_id TEXT,
+      status TEXT NOT NULL,
+      amount INTEGER NOT NULL,
+      currency TEXT NOT NULL,
+      created INTEGER NOT NULL,
+      data TEXT NOT NULL
+    )
+  `);
+
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS setup_intents (
+      id TEXT PRIMARY KEY,
+      customer_id TEXT,
+      payment_method_id TEXT,
+      status TEXT NOT NULL,
+      client_secret TEXT NOT NULL,
+      created INTEGER NOT NULL,
+      data TEXT NOT NULL
+    )
+  `);
+
   return db;
 }
 
