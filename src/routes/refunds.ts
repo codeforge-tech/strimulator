@@ -23,6 +23,9 @@ export function refundRoutes(db: StrimulatorDB, eventService?: EventService) {
     .post("/", async ({ request }) => {
       const rawBody = await request.text();
       const params = parseStripeBody(rawBody);
+      if (typeof params.amount === "string") {
+        params.amount = parseInt(params.amount, 10);
+      }
       const refund = service.create(params);
       eventService?.emit("refund.created", refund as unknown as Record<string, unknown>);
       return refund;

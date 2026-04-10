@@ -1,5 +1,24 @@
 import type { StrimulatorDB } from "../db";
 
+/**
+ * Parse expand params from URL search params.
+ * Handles both `expand[]=field` (curl/raw) and `expand[0]=field` (Stripe SDK) formats.
+ */
+export function parseExpandParams(url: URL): string[] {
+  // Try expand[] format first (curl / raw requests)
+  const pushFormat = url.searchParams.getAll("expand[]");
+  if (pushFormat.length > 0) return pushFormat;
+
+  // Try indexed format: expand[0], expand[1], ... (Stripe SDK)
+  const indexed: string[] = [];
+  for (let i = 0; ; i++) {
+    const val = url.searchParams.get(`expand[${i}]`);
+    if (val === null) break;
+    indexed.push(val);
+  }
+  return indexed;
+}
+
 // Resolver: given an ID and DB, return the expanded object
 type Resolver = (id: string, db: StrimulatorDB) => any;
 

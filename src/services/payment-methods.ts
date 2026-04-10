@@ -45,6 +45,7 @@ const MAGIC_TOKEN_MAP: Record<string, CardDetails> = {
   tok_visa_debit: { brand: "visa", last4: "5556", expMonth: 12, expYear: 2034, funding: "debit" },
   tok_threeDSecureRequired: { brand: "visa", last4: "3220", expMonth: 12, expYear: 2034, funding: "credit" },
   tok_threeDSecureOptional: { brand: "visa", last4: "3222", expMonth: 12, expYear: 2034, funding: "credit" },
+  tok_chargeDeclined: { brand: "visa", last4: "0002", expMonth: 12, expYear: 2034, funding: "credit" },
 };
 
 function resolveCardDetails(token?: string): CardDetails {

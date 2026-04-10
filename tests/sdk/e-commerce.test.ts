@@ -1151,4 +1151,188 @@ describe("E-Commerce Payment Flows", () => {
       }
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // tok_chargeDeclined — decline via magic token (no actionFlags needed)
+  // ---------------------------------------------------------------------------
+
+  describe("Decline via tok_chargeDeclined magic token", () => {
+    test("tok_chargeDeclined creates a PM with last4 0002", async () => {
+      const pm = await stripe.paymentMethods.create({
+        type: "card",
+        card: { token: "tok_chargeDeclined" } as any,
+      });
+      expect(pm.card?.last4).toBe("0002");
+      expect(pm.card?.brand).toBe("visa");
+    });
+
+    test("confirming PI with tok_chargeDeclined card is declined", async () => {
+      const pm = await stripe.paymentMethods.create({
+        type: "card",
+        card: { token: "tok_chargeDeclined" } as any,
+      });
+      const pi = await stripe.paymentIntents.create({
+        amount: 2000,
+        currency: "usd",
+        payment_method: pm.id,
+        confirm: true,
+      });
+      expect(pi.status).toBe("requires_payment_method");
+      expect(pi.last_payment_error).toBeTruthy();
+      expect(pi.last_payment_error!.code).toBe("card_declined");
+    });
+
+    test("declined via magic token can be retried with a good card", async () => {
+      const badPM = await stripe.paymentMethods.create({
+        type: "card",
+        card: { token: "tok_chargeDeclined" } as any,
+      });
+      const pi = await stripe.paymentIntents.create({
+        amount: 3000,
+        currency: "usd",
+        payment_method: badPM.id,
+        confirm: true,
+      });
+      expect(pi.status).toBe("requires_payment_method");
+
+      const goodPM = await createVisaPM();
+      const confirmed = await stripe.paymentIntents.confirm(pi.id, {
+        payment_method: goodPM.id,
+      });
+      expect(confirmed.status).toBe("succeeded");
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // SDK expand — verify expand works through the SDK (not just raw fetch)
+  // ---------------------------------------------------------------------------
+
+  describe("SDK expand", () => {
+    test("expand customer on PI retrieve via SDK", async () => {
+      const customer = await stripe.customers.create({ email: "expand@test.com", name: "Expand Test" });
+      const pm = await createVisaPM();
+      const pi = await stripe.paymentIntents.create({
+        amount: 1000,
+        currency: "usd",
+        customer: customer.id,
+        payment_method: pm.id,
+        confirm: true,
+      });
+
+      const retrieved = await stripe.paymentIntents.retrieve(pi.id, {
+        expand: ["customer"],
+      });
+
+      // With SDK expand working, customer should be an object, not a string
+      expect(typeof retrieved.customer).toBe("object");
+      expect((retrieved.customer as Stripe.Customer).id).toBe(customer.id);
+      expect((retrieved.customer as Stripe.Customer).email).toBe("expand@test.com");
+    });
+
+    test("expand latest_charge on PI retrieve via SDK", async () => {
+      const pm = await createVisaPM();
+      const pi = await stripe.paymentIntents.create({
+        amount: 2000,
+        currency: "usd",
+        payment_method: pm.id,
+        confirm: true,
+      });
+
+      const retrieved = await stripe.paymentIntents.retrieve(pi.id, {
+        expand: ["latest_charge"],
+      });
+
+      expect(typeof retrieved.latest_charge).toBe("object");
+      expect((retrieved.latest_charge as Stripe.Charge).amount).toBe(2000);
+      expect((retrieved.latest_charge as Stripe.Charge).status).toBe("succeeded");
+    });
+
+    test("expand payment_method on PI retrieve via SDK", async () => {
+      const pm = await createVisaPM();
+      const pi = await stripe.paymentIntents.create({
+        amount: 1500,
+        currency: "usd",
+        payment_method: pm.id,
+        confirm: true,
+      });
+
+      const retrieved = await stripe.paymentIntents.retrieve(pi.id, {
+        expand: ["payment_method"],
+      });
+
+      expect(typeof retrieved.payment_method).toBe("object");
+      expect((retrieved.payment_method as Stripe.PaymentMethod).card?.last4).toBe("4242");
+    });
+
+    test("expand multiple fields simultaneously via SDK", async () => {
+      const customer = await stripe.customers.create({ email: "multi-expand@test.com" });
+      const pm = await createVisaPM();
+      const pi = await stripe.paymentIntents.create({
+        amount: 5000,
+        currency: "usd",
+        customer: customer.id,
+        payment_method: pm.id,
+        confirm: true,
+      });
+
+      const retrieved = await stripe.paymentIntents.retrieve(pi.id, {
+        expand: ["customer", "latest_charge", "payment_method"],
+      });
+
+      expect(typeof retrieved.customer).toBe("object");
+      expect(typeof retrieved.latest_charge).toBe("object");
+      expect(typeof retrieved.payment_method).toBe("object");
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // SDK refunds with explicit amount (parseInt fix)
+  // ---------------------------------------------------------------------------
+
+  describe("SDK refunds with explicit amount", () => {
+    test("partial refund via SDK with explicit amount works correctly", async () => {
+      const pi = await paySuccessfully(5000, "usd");
+      const chargeId = pi.latest_charge as string;
+
+      const refund = await stripe.refunds.create({
+        charge: chargeId,
+        amount: 2000,
+      });
+
+      expect(refund.amount).toBe(2000);
+      expect(refund.status).toBe("succeeded");
+
+      // Verify charge is partially refunded
+      const charge = await stripe.charges.retrieve(chargeId);
+      expect(charge.amount_refunded).toBe(2000);
+      expect(charge.refunded).toBe(false);
+    });
+
+    test("multiple partial refunds via SDK accumulate correctly", async () => {
+      const pi = await paySuccessfully(10000, "usd");
+      const chargeId = pi.latest_charge as string;
+
+      await stripe.refunds.create({ charge: chargeId, amount: 3000 });
+      await stripe.refunds.create({ charge: chargeId, amount: 2000 });
+      await stripe.refunds.create({ charge: chargeId, amount: 5000 });
+
+      const charge = await stripe.charges.retrieve(chargeId);
+      expect(charge.amount_refunded).toBe(10000);
+      expect(charge.refunded).toBe(true);
+    });
+
+    test("over-refund via SDK is rejected", async () => {
+      const pi = await paySuccessfully(3000, "usd");
+      const chargeId = pi.latest_charge as string;
+
+      await stripe.refunds.create({ charge: chargeId, amount: 2000 });
+
+      try {
+        await stripe.refunds.create({ charge: chargeId, amount: 2000 });
+        expect(true).toBe(false);
+      } catch (err: any) {
+        expect(err.statusCode).toBe(400);
+      }
+    });
+  });
 });
