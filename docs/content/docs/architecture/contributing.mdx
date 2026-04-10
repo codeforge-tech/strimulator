@@ -1,0 +1,45 @@
+---
+title: Contributing
+description: Development setup and guidelines for contributors
+---
+
+## Development Setup
+
+```bash
+git clone https://github.com/codeforge-tech/strimulator.git
+cd strimulator
+bun install
+bun run dev   # Start with watch mode
+```
+
+## Running Tests
+
+```bash
+bun test                 # Run all tests (unit + integration + SDK)
+bun test tests/unit/     # Run unit tests only
+bun test tests/sdk/      # Run SDK tests only
+bun test tests/integration/customers.test.ts  # Single file
+bun x tsc --noEmit       # Type check
+```
+
+## Adding a New Resource
+
+1. **Schema:** Create `src/db/schema/<resource>.ts` with the Drizzle table definition
+2. **Service:** Create `src/services/<resource>.ts` with a class that takes `StrimulatorDB`
+3. **Routes:** Create `src/routes/<resource>.ts` as an Elysia plugin factory
+4. **Wire up:** Register routes in `src/app.ts`
+5. **Tests:** Add unit tests in `tests/unit/` and SDK tests in `tests/sdk/`
+
+## Conventions
+
+- **IDs:** Generated via `generateId(type)` with crypto.randomBytes. Each type has a prefix (`cus_`, `pi_`, `sub_`, etc.) defined in `src/lib/id-generator.ts`.
+- **Body format:** Always `application/x-www-form-urlencoded` with bracket notation. Use `parseStripeBody()`.
+- **Soft deletes:** Use a `deleted` integer flag (0/1), never hard-delete.
+- **No conventional commits:** Write clear descriptions, don't prefix with `feat:`, `fix:`, etc.
+
+## Database Migrations
+
+```bash
+bun run db:generate  # Generate migration from schema changes
+bun run db:migrate   # Apply migrations
+```

@@ -1,0 +1,13 @@
+{
+  "title": "Strimulator",
+  "pages": [
+    "---Getting Started---",
+    "getting-started",
+    "---Guides---",
+    "guides",
+    "---API Reference---",
+    "api",
+    "---Architecture---",
+    "architecture"
+  ]
+}

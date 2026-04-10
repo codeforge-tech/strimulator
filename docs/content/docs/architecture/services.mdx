@@ -1,0 +1,75 @@
+---
+title: Services
+description: Business logic layer and state machines
+---
+
+Services are classes in `src/services/` that encapsulate all business logic. Each service takes `StrimulatorDB` in the constructor and returns `Stripe.*` types.
+
+## Pattern
+
+```typescript
+class CustomerService {
+  constructor(private db: StrimulatorDB) {}
+
+  create(params: CreateParams): Stripe.Customer {
+    // Validate, insert to DB, build shape, return
+  }
+
+  retrieve(id: string): Stripe.Customer {
+    // Query DB, build shape, return (or throw 404)
+  }
+}
+```
+
+Each resource has a `build*Shape()` function that constructs the full Stripe object. The full JSON is stored in a `data` text column; key fields are indexed separately for queries.
+
+## State Machines
+
+Resources with lifecycle states validate transitions with `stateTransitionError()`:
+
+### Payment Intents
+
+```
+requires_payment_method → requires_confirmation → requires_action → succeeded
+                                                                   → canceled
+```
+
+### Setup Intents
+
+```
+requires_payment_method → requires_confirmation → succeeded
+                                                → canceled
+```
+
+### Subscriptions
+
+```
+trialing → active → past_due → canceled
+                   → canceled
+```
+
+### Invoices
+
+```
+draft → open → paid
+             → void
+```
+
+## Event Emission
+
+Services with state changes emit events via an optional `EventService` dependency:
+
+```typescript
+this.eventService?.emit("payment_intent.succeeded", paymentIntent);
+```
+
+`EventService.emit()` persists the event to DB and synchronously notifies listeners. `WebhookDeliveryService` is registered as a listener and delivers to matching webhook endpoints with HMAC-SHA256 signatures.
+
+## Search
+
+Search endpoints load all rows and filter in-memory via `parseSearchQuery()` / `matchesCondition()`. Supports Stripe's query language:
+
+- `email:"foo@bar.com"` — exact match
+- `status~"act"` — contains
+- `metadata["key"]:"value"` — metadata search
+- Combine with `AND`

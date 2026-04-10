@@ -1,0 +1,42 @@
+---
+title: Strimulator
+description: A local Stripe emulator for development and testing
+---
+
+Strimulator is a drop-in local replacement for the Stripe API. It runs as a single process, stores everything in SQLite, and is compatible with the official `stripe` Node SDK. Use it to develop and test payment flows entirely offline — no Stripe account or network access required.
+
+**Think of it as [LocalStack](https://github.com/localstack/localstack), but for Stripe.**
+
+## Why Strimulator?
+
+- **Offline development** — No internet, no Stripe test mode, no rate limits
+- **Fast feedback** — Instant responses, no network latency
+- **Full control** — Trigger payment failures, advance subscriptions, simulate edge cases from the dashboard
+- **SDK-compatible** — Point the official `stripe` package at localhost and it just works
+- **Docker-ready** — Drop it into your docker-compose alongside Postgres, Redis, Firebase emulator, etc.
+
+## Supported Resources
+
+| Resource | Endpoints | State Machine |
+|----------|-----------|:------------:|
+| Customers | CRUD + list + search | |
+| Products | CRUD + list + search | |
+| Prices | create, retrieve, update, list | |
+| Payment Methods | create, retrieve, attach, detach, list | |
+| Payment Intents | create, retrieve, confirm, capture, cancel, list, search | ✓ |
+| Setup Intents | create, retrieve, confirm, cancel, list | ✓ |
+| Charges | retrieve, list | |
+| Refunds | create, retrieve, list | |
+| Subscriptions | create, retrieve, cancel, list, search | ✓ |
+| Invoices | create, retrieve, finalize, pay, void, list, search | ✓ |
+| Events | retrieve, list | |
+| Webhook Endpoints | CRUD + list | |
+| Test Clocks | create, retrieve, advance, delete, list | |
+
+## Additional Features
+
+- **Webhook delivery** with `Stripe-Signature` HMAC-SHA256 headers and retry logic
+- **Search API** with Stripe's query language
+- **expand[]** for one-level and nested expansion
+- **Idempotency-Key** support for POST requests
+- **Magic test tokens** — `tok_visa`, `tok_mastercard`, `tok_amex`, `tok_visa_debit`

@@ -1,0 +1,43 @@
+---
+title: 3D Secure Simulation
+description: Simulate 3DS authentication challenges in payment flows
+---
+
+Strimulator supports simulating 3D Secure (3DS) authentication challenges for testing payment flows that require additional verification.
+
+## Triggering 3DS
+
+Use the magic token `tok_threeDSecureRequired` (a payment method with last4 `3220`) to trigger `requires_action` status on confirm:
+
+```typescript
+const paymentIntent = await stripe.paymentIntents.create({
+  amount: 2000,
+  currency: "usd",
+  payment_method: "tok_threeDSecureRequired",
+  confirm: true,
+});
+
+console.log(paymentIntent.status); // "requires_action"
+console.log(paymentIntent.next_action?.type); // "use_stripe_sdk"
+```
+
+## Completing the 3DS Challenge
+
+Re-confirm the payment intent to simulate the user completing the 3DS challenge:
+
+```typescript
+const completed = await stripe.paymentIntents.confirm(paymentIntent.id);
+console.log(completed.status); // "succeeded"
+```
+
+## Flow Summary
+
+```
+Create PI with tok_threeDSecureRequired + confirm: true
+  → status: "requires_action"
+  → next_action: { type: "use_stripe_sdk" }
+
+Re-confirm the PI
+  → status: "succeeded"
+  → charge created
+```
