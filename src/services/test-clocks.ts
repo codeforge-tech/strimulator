@@ -1,5 +1,6 @@
 import type Stripe from "stripe";
 import { eq } from "drizzle-orm";
+import { cursorCondition } from "../lib/pagination";
 import type { StrimulatorDB } from "../db";
 import { testClocks } from "../db/schema/test-clocks";
 import { subscriptions, subscriptionItems } from "../db/schema/subscriptions";
@@ -261,9 +262,14 @@ export class TestClockService {
       if (!cursor) {
         throw resourceNotFoundError("test_clock", startingAfter);
       }
-      rows = this.db.select().from(testClocks).limit(fetchLimit).all();
+      rows = this.db.select().from(testClocks)
+        .where(cursorCondition(testClocks.created, testClocks.id, cursor.created, cursor.id))
+        .orderBy(testClocks.created, testClocks.id)
+        .limit(fetchLimit).all();
     } else {
-      rows = this.db.select().from(testClocks).limit(fetchLimit).all();
+      rows = this.db.select().from(testClocks)
+        .orderBy(testClocks.created, testClocks.id)
+        .limit(fetchLimit).all();
     }
 
     const hasMore = rows.length > limit;

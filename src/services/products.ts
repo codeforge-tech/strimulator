@@ -1,10 +1,10 @@
 import type Stripe from "stripe";
-import { eq, gt, and } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import type { StrimulatorDB } from "../db";
 import { products } from "../db/schema/products";
 import { generateId } from "../lib/id-generator";
 import { now } from "../lib/timestamps";
-import { buildListResponse, type ListParams, type ListResponse } from "../lib/pagination";
+import { buildListResponse, cursorCondition, type ListParams, type ListResponse } from "../lib/pagination";
 import { resourceNotFoundError, invalidRequestError } from "../errors";
 
 export interface CreateProductParams {
@@ -161,13 +161,15 @@ export class ProductService {
 
       rows = this.db.select()
         .from(products)
-        .where(and(eq(products.deleted, 0), gt(products.created, cursor.created)))
+        .where(and(eq(products.deleted, 0), cursorCondition(products.created, products.id, cursor.created, cursor.id)))
+        .orderBy(products.created, products.id)
         .limit(fetchLimit)
         .all();
     } else {
       rows = this.db.select()
         .from(products)
         .where(eq(products.deleted, 0))
+        .orderBy(products.created, products.id)
         .limit(fetchLimit)
         .all();
     }

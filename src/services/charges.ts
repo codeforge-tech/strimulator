@@ -1,10 +1,10 @@
 import type Stripe from "stripe";
-import { eq, gt, and } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import type { StrimulatorDB } from "../db";
 import { charges } from "../db/schema/charges";
 import { generateId } from "../lib/id-generator";
 import { now } from "../lib/timestamps";
-import { buildListResponse, type ListParams, type ListResponse } from "../lib/pagination";
+import { buildListResponse, cursorCondition, type ListParams, type ListResponse } from "../lib/pagination";
 import { resourceNotFoundError } from "../errors";
 
 export interface CreateChargeParams {
@@ -115,7 +115,7 @@ export class ChargeService {
     const { limit, startingAfter, paymentIntentId, customerId } = params;
     const fetchLimit = limit + 1;
 
-    const buildConditions = (extraCondition?: ReturnType<typeof gt>) => {
+    const buildConditions = (extraCondition?: ReturnType<typeof eq>) => {
       const conditions = [];
       if (paymentIntentId) conditions.push(eq(charges.payment_intent_id, paymentIntentId));
       if (customerId) conditions.push(eq(charges.customer_id, customerId));
@@ -131,15 +131,15 @@ export class ChargeService {
         throw resourceNotFoundError("charge", startingAfter);
       }
 
-      const condition = buildConditions(gt(charges.created, cursor.created));
+      const condition = buildConditions(cursorCondition(charges.created, charges.id, cursor.created, cursor.id));
       rows = condition
-        ? this.db.select().from(charges).where(condition).limit(fetchLimit).all()
-        : this.db.select().from(charges).limit(fetchLimit).all();
+        ? this.db.select().from(charges).where(condition).orderBy(charges.created, charges.id).limit(fetchLimit).all()
+        : this.db.select().from(charges).orderBy(charges.created, charges.id).limit(fetchLimit).all();
     } else {
       const condition = buildConditions();
       rows = condition
-        ? this.db.select().from(charges).where(condition).limit(fetchLimit).all()
-        : this.db.select().from(charges).limit(fetchLimit).all();
+        ? this.db.select().from(charges).where(condition).orderBy(charges.created, charges.id).limit(fetchLimit).all()
+        : this.db.select().from(charges).orderBy(charges.created, charges.id).limit(fetchLimit).all();
     }
 
     const hasMore = rows.length > limit;

@@ -1,10 +1,10 @@
 import type Stripe from "stripe";
-import { eq, gt, and } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import type { StrimulatorDB } from "../db";
 import { subscriptions, subscriptionItems } from "../db/schema/subscriptions";
 import { generateId } from "../lib/id-generator";
 import { now } from "../lib/timestamps";
-import { buildListResponse, type ListParams, type ListResponse } from "../lib/pagination";
+import { buildListResponse, cursorCondition, type ListParams, type ListResponse } from "../lib/pagination";
 import { parseSearchQuery, matchesCondition, buildSearchResult, type SearchResult } from "../lib/search";
 import { resourceNotFoundError, invalidRequestError, stateTransitionError } from "../errors";
 import type { EventService } from "./events";
@@ -454,7 +454,7 @@ export class SubscriptionService {
     const { limit, startingAfter, customerId } = params;
     const fetchLimit = limit + 1;
 
-    const buildConditions = (extraCondition?: ReturnType<typeof gt>) => {
+    const buildConditions = (extraCondition?: ReturnType<typeof eq>) => {
       const conditions = [];
       if (customerId) conditions.push(eq(subscriptions.customerId, customerId));
       if (extraCondition) conditions.push(extraCondition);
@@ -469,15 +469,15 @@ export class SubscriptionService {
         throw resourceNotFoundError("subscription", startingAfter);
       }
 
-      const condition = buildConditions(gt(subscriptions.created, cursor.created));
+      const condition = buildConditions(cursorCondition(subscriptions.created, subscriptions.id, cursor.created, cursor.id));
       rows = condition
-        ? this.db.select().from(subscriptions).where(condition).limit(fetchLimit).all()
-        : this.db.select().from(subscriptions).limit(fetchLimit).all();
+        ? this.db.select().from(subscriptions).where(condition).orderBy(subscriptions.created, subscriptions.id).limit(fetchLimit).all()
+        : this.db.select().from(subscriptions).orderBy(subscriptions.created, subscriptions.id).limit(fetchLimit).all();
     } else {
       const condition = buildConditions();
       rows = condition
-        ? this.db.select().from(subscriptions).where(condition).limit(fetchLimit).all()
-        : this.db.select().from(subscriptions).limit(fetchLimit).all();
+        ? this.db.select().from(subscriptions).where(condition).orderBy(subscriptions.created, subscriptions.id).limit(fetchLimit).all()
+        : this.db.select().from(subscriptions).orderBy(subscriptions.created, subscriptions.id).limit(fetchLimit).all();
     }
 
     const hasMore = rows.length > limit;

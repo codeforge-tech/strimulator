@@ -1,8 +1,28 @@
+import { gt, eq, and, or } from "drizzle-orm";
+import type { SQLiteColumn } from "drizzle-orm/sqlite-core";
+
 export interface ListResponse<T> {
   object: "list";
   data: T[];
   has_more: boolean;
   url: string;
+}
+
+/**
+ * Build a composite cursor condition for keyset pagination.
+ * Handles same-second tiebreaking by using (created, id) instead of just created.
+ * Returns: (created > cursor.created) OR (created = cursor.created AND id > cursor.id)
+ */
+export function cursorCondition(
+  createdCol: SQLiteColumn,
+  idCol: SQLiteColumn,
+  cursorCreated: number,
+  cursorId: string,
+) {
+  return or(
+    gt(createdCol, cursorCreated),
+    and(eq(createdCol, cursorCreated), gt(idCol, cursorId)),
+  )!;
 }
 
 export function buildListResponse<T>(items: T[], url: string, hasMore: boolean): ListResponse<T> {

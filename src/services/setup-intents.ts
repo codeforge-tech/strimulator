@@ -1,10 +1,10 @@
 import type Stripe from "stripe";
-import { eq, gt } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import type { StrimulatorDB } from "../db";
 import { setupIntents } from "../db/schema/setup-intents";
 import { generateId, generateSecret } from "../lib/id-generator";
 import { now } from "../lib/timestamps";
-import { buildListResponse, type ListParams, type ListResponse } from "../lib/pagination";
+import { buildListResponse, cursorCondition, type ListParams, type ListResponse } from "../lib/pagination";
 import { resourceNotFoundError, invalidRequestError, stateTransitionError } from "../errors";
 import type { PaymentMethodService } from "./payment-methods";
 
@@ -231,13 +231,15 @@ export class SetupIntentService {
       rows = this.db
         .select()
         .from(setupIntents)
-        .where(gt(setupIntents.created, cursor.created))
+        .where(cursorCondition(setupIntents.created, setupIntents.id, cursor.created, cursor.id))
+        .orderBy(setupIntents.created, setupIntents.id)
         .limit(fetchLimit)
         .all();
     } else {
       rows = this.db
         .select()
         .from(setupIntents)
+        .orderBy(setupIntents.created, setupIntents.id)
         .limit(fetchLimit)
         .all();
     }

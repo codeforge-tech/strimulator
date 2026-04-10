@@ -1,10 +1,10 @@
 import type Stripe from "stripe";
-import { eq, gt, and } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import type { StrimulatorDB } from "../db";
 import { prices } from "../db/schema/prices";
 import { generateId } from "../lib/id-generator";
 import { now } from "../lib/timestamps";
-import { buildListResponse, type ListParams, type ListResponse } from "../lib/pagination";
+import { buildListResponse, cursorCondition, type ListParams, type ListResponse } from "../lib/pagination";
 import { resourceNotFoundError, invalidRequestError } from "../errors";
 
 export interface RecurringParams {
@@ -174,13 +174,15 @@ export class PriceService {
         throw resourceNotFoundError("price", startingAfter);
       }
 
+      const cc = cursorCondition(prices.created, prices.id, cursor.created, cursor.id);
       const conditions = product
-        ? and(eq(prices.product_id, product), gt(prices.created, cursor.created))
-        : gt(prices.created, cursor.created);
+        ? and(eq(prices.product_id, product), cc)
+        : cc;
 
       rows = this.db.select()
         .from(prices)
         .where(conditions)
+        .orderBy(prices.created, prices.id)
         .limit(fetchLimit)
         .all();
     } else {
@@ -189,8 +191,8 @@ export class PriceService {
         : undefined;
 
       rows = conditions
-        ? this.db.select().from(prices).where(conditions).limit(fetchLimit).all()
-        : this.db.select().from(prices).limit(fetchLimit).all();
+        ? this.db.select().from(prices).where(conditions).orderBy(prices.created, prices.id).limit(fetchLimit).all()
+        : this.db.select().from(prices).orderBy(prices.created, prices.id).limit(fetchLimit).all();
     }
 
     const hasMore = rows.length > limit;

@@ -1,11 +1,11 @@
 import type Stripe from "stripe";
-import { eq, gt, and } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import type { StrimulatorDB } from "../db";
 import { refunds } from "../db/schema/refunds";
 import { charges } from "../db/schema/charges";
 import { generateId } from "../lib/id-generator";
 import { now } from "../lib/timestamps";
-import { buildListResponse, type ListParams, type ListResponse } from "../lib/pagination";
+import { buildListResponse, cursorCondition, type ListParams, type ListResponse } from "../lib/pagination";
 import { resourceNotFoundError, invalidRequestError } from "../errors";
 import type { ChargeService } from "./charges";
 
@@ -171,7 +171,7 @@ export class RefundService {
     const { limit, startingAfter, chargeId, paymentIntentId } = params;
     const fetchLimit = limit + 1;
 
-    const buildConditions = (extraCondition?: ReturnType<typeof gt>) => {
+    const buildConditions = (extraCondition?: ReturnType<typeof eq>) => {
       const conditions = [];
       if (chargeId) conditions.push(eq(refunds.charge_id, chargeId));
       if (paymentIntentId) conditions.push(eq(refunds.payment_intent_id, paymentIntentId));
@@ -187,15 +187,15 @@ export class RefundService {
         throw resourceNotFoundError("refund", startingAfter);
       }
 
-      const condition = buildConditions(gt(refunds.created, cursor.created));
+      const condition = buildConditions(cursorCondition(refunds.created, refunds.id, cursor.created, cursor.id));
       rows = condition
-        ? this.db.select().from(refunds).where(condition).limit(fetchLimit).all()
-        : this.db.select().from(refunds).limit(fetchLimit).all();
+        ? this.db.select().from(refunds).where(condition).orderBy(refunds.created, refunds.id).limit(fetchLimit).all()
+        : this.db.select().from(refunds).orderBy(refunds.created, refunds.id).limit(fetchLimit).all();
     } else {
       const condition = buildConditions();
       rows = condition
-        ? this.db.select().from(refunds).where(condition).limit(fetchLimit).all()
-        : this.db.select().from(refunds).limit(fetchLimit).all();
+        ? this.db.select().from(refunds).where(condition).orderBy(refunds.created, refunds.id).limit(fetchLimit).all()
+        : this.db.select().from(refunds).orderBy(refunds.created, refunds.id).limit(fetchLimit).all();
     }
 
     const hasMore = rows.length > limit;
