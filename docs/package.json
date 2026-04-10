@@ -1,0 +1,26 @@
+{
+  "name": "strimulator-docs",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start",
+    "generate": "bun ./scripts/generate-docs.ts"
+  },
+  "dependencies": {
+    "fumadocs-core": "latest",
+    "fumadocs-mdx": "latest",
+    "fumadocs-openapi": "latest",
+    "fumadocs-ui": "latest",
+    "next": "^15",
+    "react": "^19",
+    "react-dom": "^19"
+  },
+  "devDependencies": {
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "typescript": "^5",
+    "@tailwindcss/postcss": "^4",
+    "tailwindcss": "^4"
+  }
+}
