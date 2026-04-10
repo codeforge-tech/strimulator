@@ -1,0 +1,126 @@
+---
+import Layout from "../layouts/Layout.astro";
+
+const url = new URL(Astro.request.url);
+const paymentIntent = url.searchParams.get("payment_intent") ?? "unknown";
+const amount = parseInt(url.searchParams.get("amount") ?? "0", 10);
+const displayAmount = `$${(amount / 100).toFixed(2)}`;
+---
+
+<Layout title="Payment Successful">
+  <div class="result-card success">
+    <div class="icon">&#10003;</div>
+    <h1>Payment Successful</h1>
+    <div class="details">
+      <div class="detail-row">
+        <span>Amount</span>
+        <span>{displayAmount}</span>
+      </div>
+      <div class="detail-row">
+        <span>Payment Intent</span>
+        <span class="mono">{paymentIntent}</span>
+      </div>
+      <div class="detail-row">
+        <span>Status</span>
+        <span class="badge">succeeded</span>
+      </div>
+    </div>
+    <div class="actions">
+      <a href="/" class="btn">Continue Shopping</a>
+      <a href="http://localhost:12111/dashboard" target="_blank" class="btn secondary">View in Dashboard</a>
+    </div>
+  </div>
+
+  <style>
+    .result-card {
+      max-width: 480px;
+      margin: 2rem auto;
+      background: white;
+      border-radius: 12px;
+      padding: 2.5rem;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+      text-align: center;
+    }
+
+    .icon {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 1.25rem;
+      font-size: 2rem;
+    }
+
+    .success .icon {
+      background: #d4edda;
+      color: #28a745;
+    }
+
+    h1 {
+      font-size: 1.4rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .details {
+      text-align: left;
+      border-top: 1px solid #eee;
+      padding-top: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.6rem 0;
+      font-size: 0.95rem;
+    }
+
+    .detail-row span:first-child {
+      color: #666;
+    }
+
+    .mono {
+      font-family: "SF Mono", "Fira Code", monospace;
+      font-size: 0.85rem;
+    }
+
+    .badge {
+      background: #d4edda;
+      color: #28a745;
+      padding: 0.15rem 0.6rem;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    .actions {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+    }
+
+    .btn {
+      padding: 0.7rem 1.5rem;
+      border-radius: 6px;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    .btn:not(.secondary) {
+      background: #5469d4;
+      color: white;
+    }
+
+    .btn.secondary {
+      background: #f0f0f5;
+      color: #1a1a2e;
+    }
+
+    .btn:hover {
+      opacity: 0.9;
+    }
+  </style>
+</Layout>
