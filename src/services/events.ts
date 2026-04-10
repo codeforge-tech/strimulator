@@ -1,5 +1,5 @@
 import type Stripe from "stripe";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, lt, or } from "drizzle-orm";
 import type { StrimulatorDB } from "../db";
 import { events } from "../db/schema/events";
 import { generateId } from "../lib/id-generator";
@@ -94,10 +94,10 @@ export class EventService {
     const { limit, type, startingAfter } = params;
     const fetchLimit = limit + 1;
 
-    const buildConditions = (cursorCondition?: ReturnType<typeof eq>) => {
+    const buildConditions = (extraCondition?: ReturnType<typeof eq>) => {
       const conditions = [];
       if (type) conditions.push(eq(events.type, type));
-      if (cursorCondition) conditions.push(cursorCondition);
+      if (extraCondition) conditions.push(extraCondition);
       return conditions.length > 0 ? and(...conditions) : undefined;
     };
 
@@ -109,35 +109,32 @@ export class EventService {
         throw resourceNotFoundError("event", startingAfter);
       }
 
-      // Use desc ordering on created, paginating "after" means created < cursor.created
-      const condition = buildConditions();
-      if (condition) {
-        rows = this.db.select()
-          .from(events)
-          .where(and(condition, eq(events.created, cursor.created)))
-          .orderBy(desc(events.created))
-          .limit(fetchLimit)
-          .all();
-      } else {
-        rows = this.db.select()
-          .from(events)
-          .orderBy(desc(events.created))
-          .limit(fetchLimit)
-          .all();
-      }
+      // Desc ordering: "after" means older items (created < cursor.created),
+      // with id tiebreaker for same-second items
+      const cc = or(
+        lt(events.created, cursor.created),
+        and(eq(events.created, cursor.created), lt(events.id, cursor.id)),
+      )!;
+      const condition = buildConditions(cc);
+      rows = this.db.select()
+        .from(events)
+        .where(condition)
+        .orderBy(desc(events.created), desc(events.id))
+        .limit(fetchLimit)
+        .all();
     } else {
       const condition = buildConditions();
       if (condition) {
         rows = this.db.select()
           .from(events)
           .where(condition)
-          .orderBy(desc(events.created))
+          .orderBy(desc(events.created), desc(events.id))
           .limit(fetchLimit)
           .all();
       } else {
         rows = this.db.select()
           .from(events)
-          .orderBy(desc(events.created))
+          .orderBy(desc(events.created), desc(events.id))
           .limit(fetchLimit)
           .all();
       }

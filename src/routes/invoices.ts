@@ -10,7 +10,7 @@ import { PaymentIntentService } from "../services/payment-intents";
 import { EventService } from "../services/events";
 import { parseStripeBody } from "../middleware/form-parser";
 import { parseListParams } from "../lib/pagination";
-import { applyExpand, type ExpandConfig } from "../lib/expand";
+import { applyExpand, parseExpandParams, type ExpandConfig } from "../lib/expand";
 import { StripeError } from "../errors";
 
 const invoiceExpandConfig: ExpandConfig = {
@@ -75,7 +75,7 @@ export function invoiceRoutes(db: StrimulatorDB, eventService?: EventService) {
     // GET /v1/invoices/:id — retrieve
     .get("/:id", async ({ params: { id }, request }) => {
       const url = new URL(request.url);
-      const expand = url.searchParams.getAll("expand[]");
+      const expand = parseExpandParams(url);
       let result: any = service.retrieve(id);
       if (expand.length) {
         result = await applyExpand(result, expand, invoiceExpandConfig, db);

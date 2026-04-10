@@ -1,10 +1,10 @@
 import type Stripe from "stripe";
-import { eq, gt, and } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import type { StrimulatorDB } from "../db";
 import { invoices } from "../db/schema/invoices";
 import { generateId } from "../lib/id-generator";
 import { now } from "../lib/timestamps";
-import { buildListResponse, type ListParams, type ListResponse } from "../lib/pagination";
+import { buildListResponse, cursorCondition, type ListParams, type ListResponse } from "../lib/pagination";
 import { parseSearchQuery, matchesCondition, buildSearchResult, type SearchResult } from "../lib/search";
 import { resourceNotFoundError, invalidRequestError, stateTransitionError } from "../errors";
 
@@ -300,7 +300,7 @@ export class InvoiceService {
     const { limit, startingAfter, customerId, subscriptionId } = params;
     const fetchLimit = limit + 1;
 
-    const buildConditions = (extraCondition?: ReturnType<typeof gt>) => {
+    const buildConditions = (extraCondition?: ReturnType<typeof eq>) => {
       const conditions = [];
       if (customerId) conditions.push(eq(invoices.customerId, customerId));
       if (subscriptionId) conditions.push(eq(invoices.subscriptionId, subscriptionId));
@@ -316,15 +316,15 @@ export class InvoiceService {
         throw resourceNotFoundError("invoice", startingAfter);
       }
 
-      const condition = buildConditions(gt(invoices.created, cursor.created));
+      const condition = buildConditions(cursorCondition(invoices.created, invoices.id, cursor.created, cursor.id));
       rows = condition
-        ? this.db.select().from(invoices).where(condition).limit(fetchLimit).all()
-        : this.db.select().from(invoices).limit(fetchLimit).all();
+        ? this.db.select().from(invoices).where(condition).orderBy(invoices.created, invoices.id).limit(fetchLimit).all()
+        : this.db.select().from(invoices).orderBy(invoices.created, invoices.id).limit(fetchLimit).all();
     } else {
       const condition = buildConditions();
       rows = condition
-        ? this.db.select().from(invoices).where(condition).limit(fetchLimit).all()
-        : this.db.select().from(invoices).limit(fetchLimit).all();
+        ? this.db.select().from(invoices).where(condition).orderBy(invoices.created, invoices.id).limit(fetchLimit).all()
+        : this.db.select().from(invoices).orderBy(invoices.created, invoices.id).limit(fetchLimit).all();
     }
 
     const hasMore = rows.length > limit;

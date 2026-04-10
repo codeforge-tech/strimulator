@@ -1,10 +1,10 @@
 import type Stripe from "stripe";
-import { eq, gt, desc, and } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import type { StrimulatorDB } from "../db";
 import { customers } from "../db/schema/customers";
 import { generateId } from "../lib/id-generator";
 import { now } from "../lib/timestamps";
-import { buildListResponse, type ListParams, type ListResponse } from "../lib/pagination";
+import { buildListResponse, cursorCondition, type ListParams, type ListResponse } from "../lib/pagination";
 import { parseSearchQuery, matchesCondition, buildSearchResult, type SearchResult } from "../lib/search";
 import { resourceNotFoundError } from "../errors";
 
@@ -181,13 +181,15 @@ export class CustomerService {
 
       rows = this.db.select()
         .from(customers)
-        .where(and(eq(customers.deleted, 0), gt(customers.created, cursor.created)))
+        .where(and(eq(customers.deleted, 0), cursorCondition(customers.created, customers.id, cursor.created, cursor.id)))
+        .orderBy(customers.created, customers.id)
         .limit(fetchLimit)
         .all();
     } else {
       rows = this.db.select()
         .from(customers)
         .where(eq(customers.deleted, 0))
+        .orderBy(customers.created, customers.id)
         .limit(fetchLimit)
         .all();
     }

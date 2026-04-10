@@ -4,7 +4,7 @@ import type { StrimulatorDB } from "../db";
 import { webhookEndpoints } from "../db/schema/webhook-endpoints";
 import { generateId, generateSecret } from "../lib/id-generator";
 import { now } from "../lib/timestamps";
-import { buildListResponse, type ListParams, type ListResponse } from "../lib/pagination";
+import { buildListResponse, cursorCondition, type ListParams, type ListResponse } from "../lib/pagination";
 import { resourceNotFoundError, invalidRequestError } from "../errors";
 
 export interface CreateWebhookEndpointParams {
@@ -144,9 +144,11 @@ export class WebhookEndpointService {
       if (!cursor) {
         throw resourceNotFoundError("webhook_endpoint", startingAfter);
       }
-      rows = this.db.select().from(webhookEndpoints).limit(fetchLimit).all();
+      rows = this.db.select().from(webhookEndpoints)
+        .where(cursorCondition(webhookEndpoints.created, webhookEndpoints.id, cursor.created, cursor.id))
+        .orderBy(webhookEndpoints.created, webhookEndpoints.id).limit(fetchLimit).all();
     } else {
-      rows = this.db.select().from(webhookEndpoints).limit(fetchLimit).all();
+      rows = this.db.select().from(webhookEndpoints).orderBy(webhookEndpoints.created, webhookEndpoints.id).limit(fetchLimit).all();
     }
 
     const hasMore = rows.length > limit;

@@ -1,10 +1,10 @@
 import type Stripe from "stripe";
-import { eq, gt, and } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import type { StrimulatorDB } from "../db";
 import { paymentIntents } from "../db/schema/payment-intents";
 import { generateId } from "../lib/id-generator";
 import { now } from "../lib/timestamps";
-import { buildListResponse, type ListParams, type ListResponse } from "../lib/pagination";
+import { buildListResponse, cursorCondition, type ListParams, type ListResponse } from "../lib/pagination";
 import { parseSearchQuery, matchesCondition, buildSearchResult, type SearchResult } from "../lib/search";
 import { randomBytes } from "crypto";
 import { resourceNotFoundError, invalidRequestError, stateTransitionError, cardError } from "../errors";
@@ -516,7 +516,7 @@ export class PaymentIntentService {
     const { limit, startingAfter, customerId } = params;
     const fetchLimit = limit + 1;
 
-    const buildConditions = (extraCondition?: ReturnType<typeof gt>) => {
+    const buildConditions = (extraCondition?: ReturnType<typeof eq>) => {
       const conditions = [];
       if (customerId) conditions.push(eq(paymentIntents.customer_id, customerId));
       if (extraCondition) conditions.push(extraCondition);
@@ -531,15 +531,15 @@ export class PaymentIntentService {
         throw resourceNotFoundError("payment_intent", startingAfter);
       }
 
-      const condition = buildConditions(gt(paymentIntents.created, cursor.created));
+      const condition = buildConditions(cursorCondition(paymentIntents.created, paymentIntents.id, cursor.created, cursor.id));
       rows = condition
-        ? this.db.select().from(paymentIntents).where(condition).limit(fetchLimit).all()
-        : this.db.select().from(paymentIntents).limit(fetchLimit).all();
+        ? this.db.select().from(paymentIntents).where(condition).orderBy(paymentIntents.created, paymentIntents.id).limit(fetchLimit).all()
+        : this.db.select().from(paymentIntents).orderBy(paymentIntents.created, paymentIntents.id).limit(fetchLimit).all();
     } else {
       const condition = buildConditions();
       rows = condition
-        ? this.db.select().from(paymentIntents).where(condition).limit(fetchLimit).all()
-        : this.db.select().from(paymentIntents).limit(fetchLimit).all();
+        ? this.db.select().from(paymentIntents).where(condition).orderBy(paymentIntents.created, paymentIntents.id).limit(fetchLimit).all()
+        : this.db.select().from(paymentIntents).orderBy(paymentIntents.created, paymentIntents.id).limit(fetchLimit).all();
     }
 
     const hasMore = rows.length > limit;

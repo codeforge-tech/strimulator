@@ -1,10 +1,10 @@
 import type Stripe from "stripe";
-import { eq, gt, and } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import type { StrimulatorDB } from "../db";
 import { paymentMethods } from "../db/schema/payment-methods";
 import { generateId } from "../lib/id-generator";
 import { now } from "../lib/timestamps";
-import { buildListResponse, type ListParams, type ListResponse } from "../lib/pagination";
+import { buildListResponse, cursorCondition, type ListParams, type ListResponse } from "../lib/pagination";
 import { resourceNotFoundError, invalidRequestError } from "../errors";
 
 export interface CreatePaymentMethodParams {
@@ -45,6 +45,7 @@ const MAGIC_TOKEN_MAP: Record<string, CardDetails> = {
   tok_visa_debit: { brand: "visa", last4: "5556", expMonth: 12, expYear: 2034, funding: "debit" },
   tok_threeDSecureRequired: { brand: "visa", last4: "3220", expMonth: 12, expYear: 2034, funding: "credit" },
   tok_threeDSecureOptional: { brand: "visa", last4: "3222", expMonth: 12, expYear: 2034, funding: "credit" },
+  tok_chargeDeclined: { brand: "visa", last4: "0002", expMonth: 12, expYear: 2034, funding: "credit" },
 };
 
 function resolveCardDetails(token?: string): CardDetails {
@@ -191,7 +192,7 @@ export class PaymentMethodService {
 
     let rows;
 
-    const buildConditions = (extraCondition?: ReturnType<typeof gt>) => {
+    const buildConditions = (extraCondition?: ReturnType<typeof eq>) => {
       const conditions = [];
       if (customerId) conditions.push(eq(paymentMethods.customer_id, customerId));
       if (type) conditions.push(eq(paymentMethods.type, type));
@@ -205,15 +206,15 @@ export class PaymentMethodService {
         throw resourceNotFoundError("payment_method", startingAfter);
       }
 
-      const condition = buildConditions(gt(paymentMethods.created, cursor.created));
+      const condition = buildConditions(cursorCondition(paymentMethods.created, paymentMethods.id, cursor.created, cursor.id));
       rows = condition
-        ? this.db.select().from(paymentMethods).where(condition).limit(fetchLimit).all()
-        : this.db.select().from(paymentMethods).limit(fetchLimit).all();
+        ? this.db.select().from(paymentMethods).where(condition).orderBy(paymentMethods.created, paymentMethods.id).limit(fetchLimit).all()
+        : this.db.select().from(paymentMethods).orderBy(paymentMethods.created, paymentMethods.id).limit(fetchLimit).all();
     } else {
       const condition = buildConditions();
       rows = condition
-        ? this.db.select().from(paymentMethods).where(condition).limit(fetchLimit).all()
-        : this.db.select().from(paymentMethods).limit(fetchLimit).all();
+        ? this.db.select().from(paymentMethods).where(condition).orderBy(paymentMethods.created, paymentMethods.id).limit(fetchLimit).all()
+        : this.db.select().from(paymentMethods).orderBy(paymentMethods.created, paymentMethods.id).limit(fetchLimit).all();
     }
 
     const hasMore = rows.length > limit;
