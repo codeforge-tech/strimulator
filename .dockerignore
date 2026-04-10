@@ -2,6 +2,7 @@ node_modules
 .git
 tests
 docs
+demo
 *.md
 .env
 strimulator.db
