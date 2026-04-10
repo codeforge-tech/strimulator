@@ -26,7 +26,7 @@ Strimulator is a drop-in local replacement for the Stripe API. It runs as a sing
 - **Full control** — Trigger payment failures, advance subscriptions, simulate edge cases from the dashboard
 - **SDK-compatible** — Point the official `stripe` package at localhost and it just works
 - **Docker-ready** — Drop it into your docker-compose alongside Postgres, Redis, Firebase emulator, etc.
-- **464 tests** — Strict fidelity to Stripe's API shapes, state machines, and error formats
+- **496 tests** — Strict fidelity to Stripe's API shapes, state machines, and error formats
 
 ## Getting Started
 
@@ -276,7 +276,20 @@ tests/
   unit/         # Service-layer tests
   integration/  # HTTP request/response tests
   sdk/          # Tests using the official stripe npm package
+docs/            # Fumadocs documentation site (Next.js)
 ```
+
+## Documentation
+
+Full documentation is available in the `docs/` directory. To run it locally:
+
+```bash
+cd docs
+bun install
+bun run dev
+```
+
+Then open http://localhost:3000 for the docs site with Getting Started guides, API reference, and architecture documentation.
 
 ## Tech Stack
 
@@ -285,7 +298,8 @@ tests/
 - **Database:** SQLite via [Drizzle ORM](https://orm.drizzle.team) + bun:sqlite
 - **Types:** Imported from the [`stripe`](https://www.npmjs.com/package/stripe) npm package
 - **Dashboard:** [Preact](https://preactjs.com) + [HTM](https://github.com/developit/htm) (loaded from CDN)
-- **Testing:** bun:test (464 tests)
+- **Testing:** bun:test (496 tests)
+- **Documentation:** [Fumadocs](https://fumadocs.dev) + OpenAPI
 
 ## License
 
