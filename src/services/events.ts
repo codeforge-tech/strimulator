@@ -116,21 +116,12 @@ export class EventService {
         and(eq(events.created, cursor.created), lt(events.id, cursor.id)),
       )!;
       const condition = buildConditions(cc);
-      if (condition) {
-        rows = this.db.select()
-          .from(events)
-          .where(condition)
-          .orderBy(desc(events.created), desc(events.id))
-          .limit(fetchLimit)
-          .all();
-      } else {
-        rows = this.db.select()
-          .from(events)
-          .where(cc)
-          .orderBy(desc(events.created), desc(events.id))
-          .limit(fetchLimit)
-          .all();
-      }
+      rows = this.db.select()
+        .from(events)
+        .where(condition)
+        .orderBy(desc(events.created), desc(events.id))
+        .limit(fetchLimit)
+        .all();
     } else {
       const condition = buildConditions();
       if (condition) {

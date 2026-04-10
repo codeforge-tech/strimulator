@@ -1,5 +1,5 @@
 import type Stripe from "stripe";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import type { StrimulatorDB } from "../db";
 import { customers } from "../db/schema/customers";
 import { generateId } from "../lib/id-generator";
