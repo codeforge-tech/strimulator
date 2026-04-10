@@ -9,6 +9,7 @@
   <a href="#supported-resources">Resources</a> &bull;
   <a href="#sdk-usage">SDK Usage</a> &bull;
   <a href="#dashboard">Dashboard</a> &bull;
+  <a href="#demo-app">Demo</a> &bull;
   <a href="#docker">Docker</a> &bull;
   <a href="#api-reference">API Reference</a>
 </p>
@@ -26,7 +27,7 @@ Strimulator is a drop-in local replacement for the Stripe API. It runs as a sing
 - **Full control** — Trigger payment failures, advance subscriptions, simulate edge cases from the dashboard
 - **SDK-compatible** — Point the official `stripe` package at localhost and it just works
 - **Docker-ready** — Drop it into your docker-compose alongside Postgres, Redis, Firebase emulator, etc.
-- **496 tests** — Strict fidelity to Stripe's API shapes, state machines, and error formats
+- **3,500+ tests** — Strict fidelity to Stripe's API shapes, state machines, and error formats
 
 ## Getting Started
 
@@ -130,7 +131,8 @@ STRIPE_API_BASE=http://localhost:12111 \
 - **Search API** — `/v1/customers/search`, `/v1/payment_intents/search`, etc. with Stripe's query language (`email:"foo@bar.com"`, `status:"active"`, `metadata["key"]:"value"`)
 - **expand[]** — One-level and nested expansion (`expand[]=customer`, `expand[]=latest_invoice.payment_intent`)
 - **Idempotency-Key** — POST requests with the same key return cached responses
-- **Magic test tokens** — `tok_visa`, `tok_mastercard`, `tok_amex`, `tok_visa_debit` produce deterministic card details
+- **3D Secure simulation** — `tok_threeDSecureRequired` triggers `requires_action` on confirm, re-confirm completes the challenge; `tok_threeDSecureOptional` also supported
+- **Magic test tokens** — `tok_visa`, `tok_mastercard`, `tok_amex`, `tok_visa_debit`, `tok_chargeDeclined`, `tok_threeDSecureRequired`, `tok_threeDSecureOptional` — all produce deterministic card details
 
 ## Dashboard
 
@@ -153,7 +155,25 @@ Trigger simulated scenarios without writing code:
 | **Expire Payment Intent** | Force a PaymentIntent into canceled state |
 | **Cycle Subscription** | Advance a subscription to the next billing period |
 
+## Demo App
+
+An Astro SSR demo shop is included in `demo/` to showcase the full payment flow — product listing, checkout with card selection, 3D Secure challenge, and success page. It uses the official Stripe Node SDK pointed at Strimulator.
+
+```bash
+# Start both Strimulator and the demo app with one command
+bun run demo
+```
+
+- **Demo shop:** http://localhost:4321
+- **Strimulator dashboard:** http://localhost:12111/dashboard
+
 ## Docker
+
+Published to GitHub Container Registry on every version tag.
+
+```bash
+docker pull ghcr.io/codeforge-tech/strimulator:latest
+```
 
 ### Docker Compose (recommended)
 
@@ -162,7 +182,7 @@ Add to your project's `docker-compose.yml`:
 ```yaml
 services:
   strimulator:
-    image: ghcr.io/codeforge-tech/strimulator:latest
+    image: ghcr.io/codeforge-tech/strimulator:0.1.0
     ports:
       - "12111:12111"
     volumes:
@@ -276,6 +296,8 @@ tests/
   unit/         # Service-layer tests
   integration/  # HTTP request/response tests
   sdk/          # Tests using the official stripe npm package
+demo/            # Astro SSR demo e-commerce app
+scripts/         # Orchestration scripts (demo launcher)
 docs/            # Fumadocs documentation site (Next.js)
 ```
 
@@ -298,7 +320,7 @@ Then open http://localhost:3000 for the docs site with Getting Started guides, A
 - **Database:** SQLite via [Drizzle ORM](https://orm.drizzle.team) + bun:sqlite
 - **Types:** Imported from the [`stripe`](https://www.npmjs.com/package/stripe) npm package
 - **Dashboard:** [Preact](https://preactjs.com) + [HTM](https://github.com/developit/htm) (loaded from CDN)
-- **Testing:** bun:test (496 tests)
+- **Testing:** bun:test (3,500+ tests)
 - **Documentation:** [Fumadocs](https://fumadocs.dev) + OpenAPI
 
 ## License
