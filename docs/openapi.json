@@ -1,0 +1,3536 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Strimulator API",
+    "description": "Local Stripe emulator for development and testing. Strimulator faithfully emulates Stripe's REST API, letting you build and test payment integrations without hitting the real Stripe servers.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "Strimulator",
+      "url": "https://github.com/codeforge-tech/strimulator"
+    },
+    "license": {
+      "name": "MIT"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:12111",
+      "description": "Local Strimulator server"
+    }
+  ],
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ],
+  "tags": [
+    { "name": "Customers", "description": "Customer objects allow you to perform recurring charges and track payments. Strimulator emulates Stripe's customer API." },
+    { "name": "Products", "description": "Products describe the items or services you offer to your customers." },
+    { "name": "Prices", "description": "Prices define the unit cost, currency, and billing cycle for both one-time and recurring purchases of products." },
+    { "name": "Payment Methods", "description": "Payment method objects represent a customer's payment instruments, such as credit cards. Strimulator supports the card type with magic test tokens." },
+    { "name": "Payment Intents", "description": "A PaymentIntent guides you through the process of collecting a payment from your customer. Strimulator emulates the full lifecycle including 3DS simulation." },
+    { "name": "Setup Intents", "description": "A SetupIntent guides you through the process of setting up a customer's payment credentials for future payments." },
+    { "name": "Charges", "description": "Charge objects are created automatically when a PaymentIntent succeeds. They represent the movement of money." },
+    { "name": "Refunds", "description": "Refund objects allow you to refund a charge that has been previously created." },
+    { "name": "Subscriptions", "description": "Subscriptions allow you to charge a customer on a recurring basis. Strimulator supports trial periods, plan changes, and cancellation." },
+    { "name": "Invoices", "description": "Invoices are statements of amounts owed by a customer. They are automatically created by subscriptions and can be finalized, paid, or voided." },
+    { "name": "Events", "description": "Events are Strimulator's way of letting you know when something interesting happens. Events are created for every state change in the system." },
+    { "name": "Webhook Endpoints", "description": "Configure webhook endpoints to receive event notifications via HTTP POST. Strimulator delivers webhooks with HMAC-SHA256 signatures." },
+    { "name": "Test Clocks", "description": "Test clocks allow you to simulate the passage of time for testing subscription billing, trial expirations, and other time-sensitive features." }
+  ],
+  "paths": {
+    "/v1/customers": {
+      "post": {
+        "operationId": "createCustomer",
+        "tags": ["Customers"],
+        "summary": "Create a customer",
+        "description": "Creates a new customer object.",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "description": "Customer's email address."
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "The customer's full name or business name."
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "An arbitrary string attached to the object."
+                  },
+                  "phone": {
+                    "type": "string",
+                    "description": "The customer's phone number."
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": { "type": "string" },
+                    "description": "Set of key-value pairs for storing additional information."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The created customer object.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Customer" }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "listCustomers",
+        "tags": ["Customers"],
+        "summary": "List all customers",
+        "description": "Returns a paginated list of customers, sorted by creation date (most recent first).",
+        "parameters": [
+          { "$ref": "#/components/parameters/Limit" },
+          { "$ref": "#/components/parameters/StartingAfter" },
+          { "$ref": "#/components/parameters/EndingBefore" }
+        ],
+        "responses": {
+          "200": {
+            "description": "A paginated list of customer objects.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ListResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": { "$ref": "#/components/schemas/Customer" }
+                        },
+                        "url": { "type": "string", "example": "/v1/customers" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/customers/search": {
+      "get": {
+        "operationId": "searchCustomers",
+        "tags": ["Customers"],
+        "summary": "Search customers",
+        "description": "Search for customers using Stripe's search query language. Supports filtering by `email`, `name`, `metadata`, and other fields.",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": true,
+            "description": "The search query string using Stripe search syntax (e.g., `email:\"user@example.com\"`).",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of results to return (1-100, default 10).",
+            "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 10 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A search result containing matching customers.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SearchResult" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": { "$ref": "#/components/schemas/Customer" }
+                        },
+                        "url": { "type": "string", "example": "/v1/customers/search" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/customers/{id}": {
+      "get": {
+        "operationId": "retrieveCustomer",
+        "tags": ["Customers"],
+        "summary": "Retrieve a customer",
+        "description": "Retrieves a customer object by its ID.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the customer to retrieve (e.g., `cus_...`).",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The customer object.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Customer" }
+              }
+            }
+          },
+          "404": {
+            "description": "Customer not found.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "updateCustomer",
+        "tags": ["Customers"],
+        "summary": "Update a customer",
+        "description": "Updates the specified customer by setting the values of the parameters passed. Any parameters not provided will be left unchanged.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the customer to update.",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": { "type": "string", "format": "email", "description": "Customer's email address." },
+                  "name": { "type": "string", "description": "The customer's full name or business name." },
+                  "description": { "type": "string", "description": "An arbitrary string attached to the object." },
+                  "phone": { "type": "string", "description": "The customer's phone number." },
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": { "type": "string" },
+                    "description": "Set of key-value pairs for storing additional information."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The updated customer object.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Customer" }
+              }
+            }
+          },
+          "404": {
+            "description": "Customer not found.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteCustomer",
+        "tags": ["Customers"],
+        "summary": "Delete a customer",
+        "description": "Permanently deletes a customer. It cannot be undone.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the customer to delete.",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A deletion confirmation object.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string", "description": "The ID of the deleted customer." },
+                    "object": { "type": "string", "enum": ["customer"] },
+                    "deleted": { "type": "boolean", "enum": [true] }
+                  },
+                  "required": ["id", "object", "deleted"]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Customer not found.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/products": {
+      "post": {
+        "operationId": "createProduct",
+        "tags": ["Products"],
+        "summary": "Create a product",
+        "description": "Creates a new product object.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string", "description": "The product's name, displayed to customers." },
+                  "active": { "type": "boolean", "description": "Whether the product is currently available for purchase. Defaults to `true`.", "default": true },
+                  "description": { "type": "string", "description": "The product's description." },
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": { "type": "string" },
+                    "description": "Set of key-value pairs for storing additional information."
+                  },
+                  "url": { "type": "string", "description": "A URL of the product." },
+                  "statement_descriptor": { "type": "string", "description": "Descriptor for the product, shown on customer statements." },
+                  "unit_label": { "type": "string", "description": "A label that represents units of this product." },
+                  "tax_code": { "type": "string", "description": "A tax code ID." }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The created product object.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Product" }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request (e.g., missing required `name` parameter).",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "listProducts",
+        "tags": ["Products"],
+        "summary": "List all products",
+        "description": "Returns a paginated list of products.",
+        "parameters": [
+          { "$ref": "#/components/parameters/Limit" },
+          { "$ref": "#/components/parameters/StartingAfter" },
+          { "$ref": "#/components/parameters/EndingBefore" }
+        ],
+        "responses": {
+          "200": {
+            "description": "A paginated list of product objects.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ListResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": { "$ref": "#/components/schemas/Product" }
+                        },
+                        "url": { "type": "string", "example": "/v1/products" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/products/{id}": {
+      "get": {
+        "operationId": "retrieveProduct",
+        "tags": ["Products"],
+        "summary": "Retrieve a product",
+        "description": "Retrieves the details of an existing product.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the product to retrieve (e.g., `prod_...`).",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The product object.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Product" }
+              }
+            }
+          },
+          "404": {
+            "description": "Product not found.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "updateProduct",
+        "tags": ["Products"],
+        "summary": "Update a product",
+        "description": "Updates the specified product by setting the values of the parameters passed.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the product to update.",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string", "description": "The product's name." },
+                  "active": { "type": "boolean", "description": "Whether the product is available for purchase." },
+                  "description": { "type": "string", "description": "The product's description." },
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": { "type": "string" },
+                    "description": "Set of key-value pairs for storing additional information."
+                  },
+                  "url": { "type": "string", "description": "A URL of the product." },
+                  "statement_descriptor": { "type": "string", "description": "Descriptor for the product." },
+                  "unit_label": { "type": "string", "description": "A label that represents units of this product." },
+                  "tax_code": { "type": "string", "description": "A tax code ID." }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The updated product object.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Product" }
+              }
+            }
+          },
+          "404": {
+            "description": "Product not found.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteProduct",
+        "tags": ["Products"],
+        "summary": "Delete a product",
+        "description": "Permanently deletes a product.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the product to delete.",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A deletion confirmation object.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string" },
+                    "object": { "type": "string", "enum": ["product"] },
+                    "deleted": { "type": "boolean", "enum": [true] }
+                  },
+                  "required": ["id", "object", "deleted"]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Product not found.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/prices": {
+      "post": {
+        "operationId": "createPrice",
+        "tags": ["Prices"],
+        "summary": "Create a price",
+        "description": "Creates a new price for an existing product. The price can be one-time or recurring.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "required": ["currency", "product"],
+                "properties": {
+                  "unit_amount": {
+                    "type": "integer",
+                    "description": "A positive integer in cents representing how much to charge."
+                  },
+                  "currency": {
+                    "type": "string",
+                    "description": "Three-letter ISO currency code, in lowercase (e.g., `usd`)."
+                  },
+                  "product": {
+                    "type": "string",
+                    "description": "The ID of the product this price belongs to (e.g., `prod_...`)."
+                  },
+                  "recurring": {
+                    "type": "object",
+                    "description": "The recurring components of a price such as `interval` and `interval_count`.",
+                    "properties": {
+                      "interval": {
+                        "type": "string",
+                        "enum": ["day", "week", "month", "year"],
+                        "description": "The frequency at which a subscription is billed."
+                      },
+                      "interval_count": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": "The number of intervals between subscription billings. Defaults to 1.",
+                        "default": 1
+                      }
+                    },
+                    "required": ["interval"]
+                  },
+                  "active": { "type": "boolean", "description": "Whether the price is currently active. Defaults to `true`.", "default": true },
+                  "nickname": { "type": "string", "description": "A brief description of the price, hidden from customers." },
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": { "type": "string" },
+                    "description": "Set of key-value pairs for storing additional information."
+                  },
+                  "lookup_key": { "type": "string", "description": "A lookup key used to retrieve prices dynamically." },
+                  "tax_behavior": {
+                    "type": "string",
+                    "enum": ["exclusive", "inclusive", "unspecified"],
+                    "description": "Specifies whether the price is inclusive or exclusive of tax."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The created price object.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Price" }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "listPrices",
+        "tags": ["Prices"],
+        "summary": "List all prices",
+        "description": "Returns a paginated list of prices. Optionally filter by product.",
+        "parameters": [
+          { "$ref": "#/components/parameters/Limit" },
+          { "$ref": "#/components/parameters/StartingAfter" },
+          { "$ref": "#/components/parameters/EndingBefore" },
+          {
+            "name": "product",
+            "in": "query",
+            "description": "Only return prices belonging to this product ID.",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A paginated list of price objects.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ListResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": { "$ref": "#/components/schemas/Price" }
+                        },
+                        "url": { "type": "string", "example": "/v1/prices" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/prices/{id}": {
+      "get": {
+        "operationId": "retrievePrice",
+        "tags": ["Prices"],
+        "summary": "Retrieve a price",
+        "description": "Retrieves the details of an existing price.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the price to retrieve (e.g., `price_...`).",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The price object.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Price" }
+              }
+            }
+          },
+          "404": {
+            "description": "Price not found.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "updatePrice",
+        "tags": ["Prices"],
+        "summary": "Update a price",
+        "description": "Updates the specified price. Only mutable fields like `active`, `nickname`, and `metadata` can be changed.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the price to update.",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "active": { "type": "boolean", "description": "Whether the price is currently active." },
+                  "nickname": { "type": "string", "description": "A brief description of the price." },
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": { "type": "string" },
+                    "description": "Set of key-value pairs for storing additional information."
+                  },
+                  "lookup_key": { "type": "string", "description": "A lookup key used to retrieve prices dynamically." },
+                  "tax_behavior": {
+                    "type": "string",
+                    "enum": ["exclusive", "inclusive", "unspecified"],
+                    "description": "Specifies whether the price is inclusive or exclusive of tax."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The updated price object.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Price" }
+              }
+            }
+          },
+          "404": {
+            "description": "Price not found.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/payment_methods": {
+      "post": {
+        "operationId": "createPaymentMethod",
+        "tags": ["Payment Methods"],
+        "summary": "Create a payment method",
+        "description": "Creates a payment method object. Strimulator supports `card` type with magic test tokens like `tok_visa`, `tok_mastercard`, `tok_amex`, `tok_visa_debit`, `tok_threeDSecureRequired`, and `tok_threeDSecureOptional`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["card"],
+                    "description": "The type of payment method. Only `card` is supported."
+                  },
+                  "card": {
+                    "type": "object",
+                    "description": "Card details. Provide a `token` for test cards.",
+                    "properties": {
+                      "token": {
+                        "type": "string",
+                        "description": "A magic test token (e.g., `tok_visa`, `tok_mastercard`, `tok_threeDSecureRequired`)."
+                      },
+                      "number": { "type": "string", "description": "The card number." },
+                      "exp_month": { "type": "integer", "description": "Two-digit number representing the card's expiration month." },
+                      "exp_year": { "type": "integer", "description": "Four-digit number representing the card's expiration year." },
+                      "cvc": { "type": "string", "description": "Card security code." }
+                    }
+                  },
+                  "billing_details": {
+                    "type": "object",
+                    "description": "Billing information associated with the payment method.",
+                    "properties": {
+                      "email": { "type": "string" },
+                      "name": { "type": "string" },
+                      "phone": { "type": "string" },
+                      "address": {
+                        "type": "object",
+                        "properties": {
+                          "line1": { "type": "string" },
+                          "line2": { "type": "string" },
+                          "city": { "type": "string" },
+                          "state": { "type": "string" },
+                          "postal_code": { "type": "string" },
+                          "country": { "type": "string" }
+                        }
+                      }
+                    }
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": { "type": "string" },
+                    "description": "Set of key-value pairs for storing additional information."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The created payment method object.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PaymentMethod" }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "listPaymentMethods",
+        "tags": ["Payment Methods"],
+        "summary": "List payment methods",
+        "description": "Returns a list of payment methods for a given customer.",
+        "parameters": [
+          { "$ref": "#/components/parameters/Limit" },
+          { "$ref": "#/components/parameters/StartingAfter" },
+          { "$ref": "#/components/parameters/EndingBefore" },
+          {
+            "name": "customer",
+            "in": "query",
+            "description": "The ID of the customer whose payment methods will be listed.",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "description": "The type of payment methods to list. Defaults to `card`.",
+            "schema": { "type": "string", "default": "card" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A paginated list of payment method objects.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ListResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": { "$ref": "#/components/schemas/PaymentMethod" }
+                        },
+                        "url": { "type": "string", "example": "/v1/payment_methods" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/payment_methods/{id}": {
+      "get": {
+        "operationId": "retrievePaymentMethod",
+        "tags": ["Payment Methods"],
+        "summary": "Retrieve a payment method",
+        "description": "Retrieves a payment method object.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the payment method to retrieve (e.g., `pm_...`).",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The payment method object.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PaymentMethod" }
+              }
+            }
+          },
+          "404": {
+            "description": "Payment method not found.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/payment_methods/{id}/attach": {
+      "post": {
+        "operationId": "attachPaymentMethod",
+        "tags": ["Payment Methods"],
+        "summary": "Attach a payment method to a customer",
+        "description": "Attaches a payment method object to a customer.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the payment method to attach.",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "required": ["customer"],
+                "properties": {
+                  "customer": {
+                    "type": "string",
+                    "description": "The ID of the customer to attach the payment method to."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The attached payment method object.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PaymentMethod" }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/payment_methods/{id}/detach": {
+      "post": {
+        "operationId": "detachPaymentMethod",
+        "tags": ["Payment Methods"],
+        "summary": "Detach a payment method from its customer",
+        "description": "Detaches a payment method object from the customer it is attached to. The payment method still exists but can no longer be used for payments.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the payment method to detach.",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The detached payment method object (customer field set to null).",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PaymentMethod" }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/payment_intents": {
+      "post": {
+        "operationId": "createPaymentIntent",
+        "tags": ["Payment Intents"],
+        "summary": "Create a payment intent",
+        "description": "Creates a PaymentIntent object. Optionally set `confirm=true` with a `payment_method` to create and confirm in one step.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "required": ["amount", "currency"],
+                "properties": {
+                  "amount": {
+                    "type": "integer",
+                    "description": "Amount intended to be collected, in the smallest currency unit (e.g., cents)."
+                  },
+                  "currency": {
+                    "type": "string",
+                    "description": "Three-letter ISO currency code, in lowercase."
+                  },
+                  "customer": {
+                    "type": "string",
+                    "description": "ID of the customer this PaymentIntent is for."
+                  },
+                  "payment_method": {
+                    "type": "string",
+                    "description": "ID of the payment method to use."
+                  },
+                  "confirm": {
+                    "type": "boolean",
+                    "description": "Set to `true` to attempt to confirm this PaymentIntent immediately.",
+                    "default": false
+                  },
+                  "capture_method": {
+                    "type": "string",
+                    "enum": ["automatic", "manual"],
+                    "description": "Controls when charges will be captured. Defaults to `automatic`.",
+                    "default": "automatic"
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": { "type": "string" },
+                    "description": "Set of key-value pairs for storing additional information."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The created PaymentIntent object.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PaymentIntent" }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "listPaymentIntents",
+        "tags": ["Payment Intents"],
+        "summary": "List payment intents",
+        "description": "Returns a paginated list of PaymentIntents. Optionally filter by customer.",
+        "parameters": [
+          { "$ref": "#/components/parameters/Limit" },
+          { "$ref": "#/components/parameters/StartingAfter" },
+          { "$ref": "#/components/parameters/EndingBefore" },
+          {
+            "name": "customer",
+            "in": "query",
+            "description": "Only return PaymentIntents for this customer ID.",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A paginated list of PaymentIntent objects.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ListResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": { "$ref": "#/components/schemas/PaymentIntent" }
+                        },
+                        "url": { "type": "string", "example": "/v1/payment_intents" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/payment_intents/search": {
+      "get": {
+        "operationId": "searchPaymentIntents",
+        "tags": ["Payment Intents"],
+        "summary": "Search payment intents",
+        "description": "Search for PaymentIntents using Stripe's search query language.",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": true,
+            "description": "The search query string (e.g., `status:\"succeeded\"`).",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of results to return (1-100, default 10).",
+            "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 10 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A search result containing matching PaymentIntents.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SearchResult" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": { "$ref": "#/components/schemas/PaymentIntent" }
+                        },
+                        "url": { "type": "string", "example": "/v1/payment_intents/search" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/payment_intents/{id}": {
+      "get": {
+        "operationId": "retrievePaymentIntent",
+        "tags": ["Payment Intents"],
+        "summary": "Retrieve a payment intent",
+        "description": "Retrieves the details of a PaymentIntent. Supports expansion of `customer`, `payment_method`, and `latest_charge`.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the PaymentIntent to retrieve (e.g., `pi_...`).",
+            "schema": { "type": "string" }
+          },
+          { "$ref": "#/components/parameters/Expand" }
+        ],
+        "responses": {
+          "200": {
+            "description": "The PaymentIntent object.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PaymentIntent" }
+              }
+            }
+          },
+          "404": {
+            "description": "PaymentIntent not found.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "updatePaymentIntent",
+        "tags": ["Payment Intents"],
+        "summary": "Update a payment intent",
+        "description": "Updates properties on a PaymentIntent without confirming. Returns the current PaymentIntent.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the PaymentIntent to update.",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The PaymentIntent object.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PaymentIntent" }
+              }
+            }
+          },
+          "404": {
+            "description": "PaymentIntent not found.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/payment_intents/{id}/confirm": {
+      "post": {
+        "operationId": "confirmPaymentIntent",
+        "tags": ["Payment Intents"],
+        "summary": "Confirm a payment intent",
+        "description": "Confirms a PaymentIntent, transitioning it to `succeeded`, `requires_capture`, or `requires_action` (for 3DS). Payment methods with last4 `3220` (`tok_threeDSecureRequired`) trigger 3DS simulation.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the PaymentIntent to confirm.",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "payment_method": {
+                    "type": "string",
+                    "description": "ID of the payment method to use for this PaymentIntent."
+                  },
+                  "capture_method": {
+                    "type": "string",
+                    "enum": ["automatic", "manual"],
+                    "description": "Controls when charges will be captured."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The confirmed PaymentIntent object.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PaymentIntent" }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid state transition (e.g., already succeeded).",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/payment_intents/{id}/capture": {
+      "post": {
+        "operationId": "capturePaymentIntent",
+        "tags": ["Payment Intents"],
+        "summary": "Capture a payment intent",
+        "description": "Captures a PaymentIntent that has a status of `requires_capture`. This is used when `capture_method=manual`.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the PaymentIntent to capture.",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "amount_to_capture": {
+                    "type": "integer",
+                    "description": "The amount to capture, which must be less than or equal to the original amount. Defaults to the full amount."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The captured PaymentIntent object with `status=succeeded`.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PaymentIntent" }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid state transition (e.g., not in `requires_capture` status).",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/payment_intents/{id}/cancel": {
+      "post": {
+        "operationId": "cancelPaymentIntent",
+        "tags": ["Payment Intents"],
+        "summary": "Cancel a payment intent",
+        "description": "Cancels a PaymentIntent. You cannot cancel a PaymentIntent with a status of `succeeded`.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the PaymentIntent to cancel.",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "cancellation_reason": {
+                    "type": "string",
+                    "enum": ["duplicate", "fraudulent", "requested_by_customer", "abandoned"],
+                    "description": "Reason for canceling the PaymentIntent."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The canceled PaymentIntent object with `status=canceled`.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PaymentIntent" }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid state transition.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/setup_intents": {
+      "post": {
+        "operationId": "createSetupIntent",
+        "tags": ["Setup Intents"],
+        "summary": "Create a setup intent",
+        "description": "Creates a SetupIntent object for setting up a customer's payment method for future payments.",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "customer": {
+                    "type": "string",
+                    "description": "ID of the customer this SetupIntent is for."
+                  },
+                  "payment_method": {
+                    "type": "string",
+                    "description": "ID of the payment method to attach."
+                  },
+                  "confirm": {
+                    "type": "boolean",
+                    "description": "Set to `true` to attempt to confirm this SetupIntent immediately.",
+                    "default": false
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": { "type": "string" },
+                    "description": "Set of key-value pairs for storing additional information."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The created SetupIntent object.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SetupIntent" }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "listSetupIntents",
+        "tags": ["Setup Intents"],
+        "summary": "List setup intents",
+        "description": "Returns a paginated list of SetupIntents.",
+        "parameters": [
+          { "$ref": "#/components/parameters/Limit" },
+          { "$ref": "#/components/parameters/StartingAfter" },
+          { "$ref": "#/components/parameters/EndingBefore" }
+        ],
+        "responses": {
+          "200": {
+            "description": "A paginated list of SetupIntent objects.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ListResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": { "$ref": "#/components/schemas/SetupIntent" }
+                        },
+                        "url": { "type": "string", "example": "/v1/setup_intents" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/setup_intents/{id}": {
+      "get": {
+        "operationId": "retrieveSetupIntent",
+        "tags": ["Setup Intents"],
+        "summary": "Retrieve a setup intent",
+        "description": "Retrieves the details of a SetupIntent.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the SetupIntent to retrieve (e.g., `seti_...`).",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The SetupIntent object.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SetupIntent" }
+              }
+            }
+          },
+          "404": {
+            "description": "SetupIntent not found.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/setup_intents/{id}/confirm": {
+      "post": {
+        "operationId": "confirmSetupIntent",
+        "tags": ["Setup Intents"],
+        "summary": "Confirm a setup intent",
+        "description": "Confirms a SetupIntent, transitioning it to `succeeded`. If a `payment_method` is provided, it attaches the payment method to the customer.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the SetupIntent to confirm.",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "payment_method": {
+                    "type": "string",
+                    "description": "ID of the payment method to use for this SetupIntent."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The confirmed SetupIntent object with `status=succeeded`.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SetupIntent" }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid state transition.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/setup_intents/{id}/cancel": {
+      "post": {
+        "operationId": "cancelSetupIntent",
+        "tags": ["Setup Intents"],
+        "summary": "Cancel a setup intent",
+        "description": "Cancels a SetupIntent. You cannot cancel a SetupIntent that has already succeeded.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the SetupIntent to cancel.",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The canceled SetupIntent object with `status=canceled`.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SetupIntent" }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid state transition.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/charges": {
+      "get": {
+        "operationId": "listCharges",
+        "tags": ["Charges"],
+        "summary": "List all charges",
+        "description": "Returns a paginated list of charges. Optionally filter by payment intent.",
+        "parameters": [
+          { "$ref": "#/components/parameters/Limit" },
+          { "$ref": "#/components/parameters/StartingAfter" },
+          { "$ref": "#/components/parameters/EndingBefore" },
+          {
+            "name": "payment_intent",
+            "in": "query",
+            "description": "Only return charges for this PaymentIntent ID.",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A paginated list of charge objects.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ListResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": { "$ref": "#/components/schemas/Charge" }
+                        },
+                        "url": { "type": "string", "example": "/v1/charges" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/charges/{id}": {
+      "get": {
+        "operationId": "retrieveCharge",
+        "tags": ["Charges"],
+        "summary": "Retrieve a charge",
+        "description": "Retrieves the details of a charge. Supports expansion of `customer` and `payment_intent`.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the charge to retrieve (e.g., `ch_...`).",
+            "schema": { "type": "string" }
+          },
+          { "$ref": "#/components/parameters/Expand" }
+        ],
+        "responses": {
+          "200": {
+            "description": "The charge object.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Charge" }
+              }
+            }
+          },
+          "404": {
+            "description": "Charge not found.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/refunds": {
+      "post": {
+        "operationId": "createRefund",
+        "tags": ["Refunds"],
+        "summary": "Create a refund",
+        "description": "Creates a refund for a charge or payment intent. You must provide either `charge` or `payment_intent`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "charge": {
+                    "type": "string",
+                    "description": "The ID of the charge to refund."
+                  },
+                  "payment_intent": {
+                    "type": "string",
+                    "description": "The ID of the PaymentIntent to refund."
+                  },
+                  "amount": {
+                    "type": "integer",
+                    "description": "A positive integer in cents representing how much to refund. Defaults to the full charge amount."
+                  },
+                  "reason": {
+                    "type": "string",
+                    "enum": ["duplicate", "fraudulent", "requested_by_customer"],
+                    "description": "The reason for the refund."
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": { "type": "string" },
+                    "description": "Set of key-value pairs for storing additional information."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The created refund object.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Refund" }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request (e.g., missing both charge and payment_intent).",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "listRefunds",
+        "tags": ["Refunds"],
+        "summary": "List all refunds",
+        "description": "Returns a paginated list of refunds. Optionally filter by charge or payment intent.",
+        "parameters": [
+          { "$ref": "#/components/parameters/Limit" },
+          { "$ref": "#/components/parameters/StartingAfter" },
+          { "$ref": "#/components/parameters/EndingBefore" },
+          {
+            "name": "charge",
+            "in": "query",
+            "description": "Only return refunds for this charge ID.",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "payment_intent",
+            "in": "query",
+            "description": "Only return refunds for this PaymentIntent ID.",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A paginated list of refund objects.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ListResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": { "$ref": "#/components/schemas/Refund" }
+                        },
+                        "url": { "type": "string", "example": "/v1/refunds" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/refunds/{id}": {
+      "get": {
+        "operationId": "retrieveRefund",
+        "tags": ["Refunds"],
+        "summary": "Retrieve a refund",
+        "description": "Retrieves the details of a refund.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the refund to retrieve (e.g., `re_...`).",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The refund object.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Refund" }
+              }
+            }
+          },
+          "404": {
+            "description": "Refund not found.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/subscriptions": {
+      "post": {
+        "operationId": "createSubscription",
+        "tags": ["Subscriptions"],
+        "summary": "Create a subscription",
+        "description": "Creates a new subscription on an existing customer. Each subscription must have at least one item with a recurring price.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "required": ["customer", "items"],
+                "properties": {
+                  "customer": {
+                    "type": "string",
+                    "description": "The ID of the customer to subscribe."
+                  },
+                  "items": {
+                    "type": "array",
+                    "description": "A list of prices and quantities the customer is subscribed to. Use bracket notation: `items[0][price]=price_...&items[0][quantity]=1`.",
+                    "items": {
+                      "type": "object",
+                      "required": ["price"],
+                      "properties": {
+                        "price": { "type": "string", "description": "The ID of the price to subscribe to." },
+                        "quantity": { "type": "integer", "description": "The quantity of the plan. Defaults to 1.", "default": 1 }
+                      }
+                    }
+                  },
+                  "trial_period_days": {
+                    "type": "integer",
+                    "description": "Number of trial days before charging the customer. Sets the subscription to `trialing` status."
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": { "type": "string" },
+                    "description": "Set of key-value pairs for storing additional information."
+                  },
+                  "test_clock": {
+                    "type": "string",
+                    "description": "ID of the test clock to associate with this subscription."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The created subscription object.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Subscription" }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "listSubscriptions",
+        "tags": ["Subscriptions"],
+        "summary": "List subscriptions",
+        "description": "Returns a paginated list of subscriptions. Optionally filter by customer.",
+        "parameters": [
+          { "$ref": "#/components/parameters/Limit" },
+          { "$ref": "#/components/parameters/StartingAfter" },
+          { "$ref": "#/components/parameters/EndingBefore" },
+          {
+            "name": "customer",
+            "in": "query",
+            "description": "Only return subscriptions for this customer ID.",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A paginated list of subscription objects.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ListResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": { "$ref": "#/components/schemas/Subscription" }
+                        },
+                        "url": { "type": "string", "example": "/v1/subscriptions" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/subscriptions/search": {
+      "get": {
+        "operationId": "searchSubscriptions",
+        "tags": ["Subscriptions"],
+        "summary": "Search subscriptions",
+        "description": "Search for subscriptions using Stripe's search query language.",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": true,
+            "description": "The search query string (e.g., `status:\"active\"`).",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of results to return (1-100, default 10).",
+            "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 10 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A search result containing matching subscriptions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SearchResult" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": { "$ref": "#/components/schemas/Subscription" }
+                        },
+                        "url": { "type": "string", "example": "/v1/subscriptions/search" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/subscriptions/{id}": {
+      "get": {
+        "operationId": "retrieveSubscription",
+        "tags": ["Subscriptions"],
+        "summary": "Retrieve a subscription",
+        "description": "Retrieves the subscription with the given ID. Supports expansion of `customer` and `latest_invoice` (including nested `latest_invoice.payment_intent`).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the subscription to retrieve (e.g., `sub_...`).",
+            "schema": { "type": "string" }
+          },
+          { "$ref": "#/components/parameters/Expand" }
+        ],
+        "responses": {
+          "200": {
+            "description": "The subscription object.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Subscription" }
+              }
+            }
+          },
+          "404": {
+            "description": "Subscription not found.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "updateSubscription",
+        "tags": ["Subscriptions"],
+        "summary": "Update a subscription",
+        "description": "Updates an existing subscription. You can change the plan, quantity, trial end, and cancellation settings.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the subscription to update.",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "items": {
+                    "type": "array",
+                    "description": "A list of subscription items, each with a price and optional quantity.",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": { "type": "string", "description": "The ID of the subscription item to update." },
+                        "price": { "type": "string", "description": "The ID of the price to switch to." },
+                        "quantity": { "type": "integer", "description": "The quantity of the plan." }
+                      }
+                    }
+                  },
+                  "cancel_at_period_end": {
+                    "type": "boolean",
+                    "description": "If set to `true`, the subscription will be canceled at the end of the current period."
+                  },
+                  "trial_end": {
+                    "type": "string",
+                    "description": "Unix timestamp or the string `now`. Sets the trial end date."
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": { "type": "string" },
+                    "description": "Set of key-value pairs for storing additional information."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The updated subscription object.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Subscription" }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          },
+          "404": {
+            "description": "Subscription not found.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "cancelSubscription",
+        "tags": ["Subscriptions"],
+        "summary": "Cancel a subscription",
+        "description": "Cancels a customer's subscription immediately. The subscription status transitions to `canceled`.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the subscription to cancel.",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The canceled subscription object.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Subscription" }
+              }
+            }
+          },
+          "404": {
+            "description": "Subscription not found.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/invoices": {
+      "post": {
+        "operationId": "createInvoice",
+        "tags": ["Invoices"],
+        "summary": "Create an invoice",
+        "description": "Creates a new invoice for a customer. Invoices are created as drafts and must be finalized before they can be paid.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "required": ["customer"],
+                "properties": {
+                  "customer": {
+                    "type": "string",
+                    "description": "The ID of the customer to create the invoice for."
+                  },
+                  "subscription": {
+                    "type": "string",
+                    "description": "The ID of the subscription to create the invoice for."
+                  },
+                  "currency": {
+                    "type": "string",
+                    "description": "Three-letter ISO currency code. Defaults to `usd`."
+                  },
+                  "amount_due": {
+                    "type": "integer",
+                    "description": "The amount due on the invoice, in cents."
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": { "type": "string" },
+                    "description": "Set of key-value pairs for storing additional information."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The created invoice object with `status=draft`.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Invoice" }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "listInvoices",
+        "tags": ["Invoices"],
+        "summary": "List all invoices",
+        "description": "Returns a paginated list of invoices. Optionally filter by customer or subscription.",
+        "parameters": [
+          { "$ref": "#/components/parameters/Limit" },
+          { "$ref": "#/components/parameters/StartingAfter" },
+          { "$ref": "#/components/parameters/EndingBefore" },
+          {
+            "name": "customer",
+            "in": "query",
+            "description": "Only return invoices for this customer ID.",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "subscription",
+            "in": "query",
+            "description": "Only return invoices for this subscription ID.",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A paginated list of invoice objects.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ListResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": { "$ref": "#/components/schemas/Invoice" }
+                        },
+                        "url": { "type": "string", "example": "/v1/invoices" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/invoices/search": {
+      "get": {
+        "operationId": "searchInvoices",
+        "tags": ["Invoices"],
+        "summary": "Search invoices",
+        "description": "Search for invoices using Stripe's search query language.",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": true,
+            "description": "The search query string (e.g., `customer:\"cus_...\"`).",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of results to return (1-100, default 10).",
+            "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 10 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A search result containing matching invoices.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SearchResult" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": { "$ref": "#/components/schemas/Invoice" }
+                        },
+                        "url": { "type": "string", "example": "/v1/invoices/search" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/invoices/{id}": {
+      "get": {
+        "operationId": "retrieveInvoice",
+        "tags": ["Invoices"],
+        "summary": "Retrieve an invoice",
+        "description": "Retrieves the invoice with the given ID. Supports expansion of `customer`, `subscription`, and `payment_intent`.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the invoice to retrieve (e.g., `in_...`).",
+            "schema": { "type": "string" }
+          },
+          { "$ref": "#/components/parameters/Expand" }
+        ],
+        "responses": {
+          "200": {
+            "description": "The invoice object.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Invoice" }
+              }
+            }
+          },
+          "404": {
+            "description": "Invoice not found.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/invoices/{id}/finalize": {
+      "post": {
+        "operationId": "finalizeInvoice",
+        "tags": ["Invoices"],
+        "summary": "Finalize an invoice",
+        "description": "Finalizes a draft invoice, transitioning it to `open` status and assigning an invoice number. Once finalized, the invoice can be paid.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the invoice to finalize.",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The finalized invoice object with `status=open`.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Invoice" }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid state transition (e.g., invoice is not a draft).",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/invoices/{id}/pay": {
+      "post": {
+        "operationId": "payInvoice",
+        "tags": ["Invoices"],
+        "summary": "Pay an invoice",
+        "description": "Pays an open invoice, transitioning it to `paid` status.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the invoice to pay.",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The paid invoice object with `status=paid`.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Invoice" }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid state transition (e.g., invoice is not open).",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/invoices/{id}/void": {
+      "post": {
+        "operationId": "voidInvoice",
+        "tags": ["Invoices"],
+        "summary": "Void an invoice",
+        "description": "Voids an open invoice, transitioning it to `void` status. A voided invoice can no longer be paid.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the invoice to void.",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The voided invoice object with `status=void`.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Invoice" }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid state transition.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/events": {
+      "get": {
+        "operationId": "listEvents",
+        "tags": ["Events"],
+        "summary": "List all events",
+        "description": "Returns a paginated list of events, sorted by creation date (most recent first). Optionally filter by event type.",
+        "parameters": [
+          { "$ref": "#/components/parameters/Limit" },
+          { "$ref": "#/components/parameters/StartingAfter" },
+          { "$ref": "#/components/parameters/EndingBefore" },
+          {
+            "name": "type",
+            "in": "query",
+            "description": "Filter events by type (e.g., `customer.created`, `payment_intent.succeeded`).",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A paginated list of event objects.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ListResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": { "$ref": "#/components/schemas/Event" }
+                        },
+                        "url": { "type": "string", "example": "/v1/events" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/events/{id}": {
+      "get": {
+        "operationId": "retrieveEvent",
+        "tags": ["Events"],
+        "summary": "Retrieve an event",
+        "description": "Retrieves the details of an event.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the event to retrieve (e.g., `evt_...`).",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The event object.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Event" }
+              }
+            }
+          },
+          "404": {
+            "description": "Event not found.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/webhook_endpoints": {
+      "post": {
+        "operationId": "createWebhookEndpoint",
+        "tags": ["Webhook Endpoints"],
+        "summary": "Create a webhook endpoint",
+        "description": "Creates a webhook endpoint that listens to specific events. Strimulator will POST event payloads to the configured URL with HMAC-SHA256 signatures.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "required": ["url", "enabled_events"],
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "The URL of the webhook endpoint."
+                  },
+                  "enabled_events": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": "The list of event types to listen for (e.g., `[\"customer.created\", \"payment_intent.succeeded\"]`). Use `[\"*\"]` to listen to all events."
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "An optional description of what the webhook is used for."
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": { "type": "string" },
+                    "description": "Set of key-value pairs for storing additional information."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The created webhook endpoint object. The response includes the webhook `secret` needed for signature verification.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/WebhookEndpoint" }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request (e.g., missing url or enabled_events).",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "listWebhookEndpoints",
+        "tags": ["Webhook Endpoints"],
+        "summary": "List webhook endpoints",
+        "description": "Returns a paginated list of webhook endpoints.",
+        "parameters": [
+          { "$ref": "#/components/parameters/Limit" },
+          { "$ref": "#/components/parameters/StartingAfter" },
+          { "$ref": "#/components/parameters/EndingBefore" }
+        ],
+        "responses": {
+          "200": {
+            "description": "A paginated list of webhook endpoint objects.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ListResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": { "$ref": "#/components/schemas/WebhookEndpoint" }
+                        },
+                        "url": { "type": "string", "example": "/v1/webhook_endpoints" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/webhook_endpoints/{id}": {
+      "get": {
+        "operationId": "retrieveWebhookEndpoint",
+        "tags": ["Webhook Endpoints"],
+        "summary": "Retrieve a webhook endpoint",
+        "description": "Retrieves the webhook endpoint with the given ID.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the webhook endpoint to retrieve (e.g., `we_...`).",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The webhook endpoint object.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/WebhookEndpoint" }
+              }
+            }
+          },
+          "404": {
+            "description": "Webhook endpoint not found.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteWebhookEndpoint",
+        "tags": ["Webhook Endpoints"],
+        "summary": "Delete a webhook endpoint",
+        "description": "Deletes a webhook endpoint. Strimulator will stop sending events to this URL.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the webhook endpoint to delete.",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A deletion confirmation object.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string" },
+                    "object": { "type": "string", "enum": ["webhook_endpoint"] },
+                    "deleted": { "type": "boolean", "enum": [true] }
+                  },
+                  "required": ["id", "object", "deleted"]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Webhook endpoint not found.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/test_helpers/test_clocks": {
+      "post": {
+        "operationId": "createTestClock",
+        "tags": ["Test Clocks"],
+        "summary": "Create a test clock",
+        "description": "Creates a new test clock with the specified frozen time. Use test clocks to simulate the passage of time for subscription billing and trial expirations.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "required": ["frozen_time"],
+                "properties": {
+                  "frozen_time": {
+                    "type": "integer",
+                    "description": "The initial frozen time as a Unix timestamp."
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "A human-readable name for the test clock."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The created test clock object.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TestClock" }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request (e.g., missing frozen_time).",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "listTestClocks",
+        "tags": ["Test Clocks"],
+        "summary": "List test clocks",
+        "description": "Returns a paginated list of test clocks.",
+        "parameters": [
+          { "$ref": "#/components/parameters/Limit" },
+          { "$ref": "#/components/parameters/StartingAfter" },
+          { "$ref": "#/components/parameters/EndingBefore" }
+        ],
+        "responses": {
+          "200": {
+            "description": "A paginated list of test clock objects.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ListResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": { "$ref": "#/components/schemas/TestClock" }
+                        },
+                        "url": { "type": "string", "example": "/v1/test_helpers/test_clocks" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/test_helpers/test_clocks/{id}": {
+      "get": {
+        "operationId": "retrieveTestClock",
+        "tags": ["Test Clocks"],
+        "summary": "Retrieve a test clock",
+        "description": "Retrieves a test clock.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the test clock to retrieve (e.g., `clock_...`).",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The test clock object.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TestClock" }
+              }
+            }
+          },
+          "404": {
+            "description": "Test clock not found.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteTestClock",
+        "tags": ["Test Clocks"],
+        "summary": "Delete a test clock",
+        "description": "Deletes a test clock and all associated resources.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the test clock to delete.",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A deletion confirmation object.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string" },
+                    "object": { "type": "string", "enum": ["test_helpers.test_clock"] },
+                    "deleted": { "type": "boolean", "enum": [true] }
+                  },
+                  "required": ["id", "object", "deleted"]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Test clock not found.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/test_helpers/test_clocks/{id}/advance": {
+      "post": {
+        "operationId": "advanceTestClock",
+        "tags": ["Test Clocks"],
+        "summary": "Advance a test clock",
+        "description": "Advances a test clock's frozen time forward. This triggers billing cycle processing for any linked subscriptions, including rolling periods, creating invoices, and processing payments.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the test clock to advance.",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "required": ["frozen_time"],
+                "properties": {
+                  "frozen_time": {
+                    "type": "integer",
+                    "description": "The new frozen time as a Unix timestamp. Must be greater than the current frozen time."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The updated test clock object with the new frozen time.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TestClock" }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request (e.g., frozen_time is not in the future).",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Authenticate with a test API key. Use any string starting with `sk_test_` (e.g., `sk_test_12345`)."
+      }
+    },
+    "parameters": {
+      "Limit": {
+        "name": "limit",
+        "in": "query",
+        "description": "A limit on the number of objects to be returned, between 1 and 100. Default is 10.",
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 10
+        }
+      },
+      "StartingAfter": {
+        "name": "starting_after",
+        "in": "query",
+        "description": "A cursor for pagination. `starting_after` is an object ID that defines your place in the list. Retrieves the next page of results after this object.",
+        "schema": { "type": "string" }
+      },
+      "EndingBefore": {
+        "name": "ending_before",
+        "in": "query",
+        "description": "A cursor for pagination. `ending_before` is an object ID that defines your place in the list. Retrieves the previous page of results before this object.",
+        "schema": { "type": "string" }
+      },
+      "Expand": {
+        "name": "expand[]",
+        "in": "query",
+        "description": "Specifies which fields in the response should be expanded. Supports dot notation for nested expansion (e.g., `latest_invoice.payment_intent`).",
+        "schema": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "explode": true
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "description": "An error response from the API.",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": ["type", "message"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "description": "The type of error (e.g., `invalid_request_error`, `authentication_error`, `card_error`).",
+                "enum": ["invalid_request_error", "authentication_error", "card_error"]
+              },
+              "message": {
+                "type": "string",
+                "description": "A human-readable message providing more details about the error."
+              },
+              "code": {
+                "type": "string",
+                "nullable": true,
+                "description": "For some errors (e.g., `resource_missing`, `payment_intent_unexpected_state`), a short string indicating the error code."
+              },
+              "param": {
+                "type": "string",
+                "nullable": true,
+                "description": "If the error is parameter-specific, the parameter related to the error."
+              },
+              "decline_code": {
+                "type": "string",
+                "nullable": true,
+                "description": "For card errors, the decline code from the issuer."
+              }
+            }
+          }
+        }
+      },
+      "ListResponse": {
+        "type": "object",
+        "description": "A list of objects with cursor-based pagination.",
+        "required": ["object", "data", "has_more", "url"],
+        "properties": {
+          "object": {
+            "type": "string",
+            "enum": ["list"],
+            "description": "String representing the object's type. Always `list`."
+          },
+          "data": {
+            "type": "array",
+            "items": {},
+            "description": "An array of the requested objects."
+          },
+          "has_more": {
+            "type": "boolean",
+            "description": "Whether there are more results available after this set."
+          },
+          "url": {
+            "type": "string",
+            "description": "The URL where this list can be accessed."
+          }
+        }
+      },
+      "SearchResult": {
+        "type": "object",
+        "description": "A search result containing matching objects.",
+        "required": ["object", "data", "has_more", "total_count", "url", "next_page"],
+        "properties": {
+          "object": {
+            "type": "string",
+            "enum": ["search_result"],
+            "description": "String representing the object's type. Always `search_result`."
+          },
+          "data": {
+            "type": "array",
+            "items": {},
+            "description": "An array of the matching objects."
+          },
+          "has_more": {
+            "type": "boolean",
+            "description": "Whether there are more results available."
+          },
+          "total_count": {
+            "type": "integer",
+            "description": "The total number of objects that match the query."
+          },
+          "url": {
+            "type": "string",
+            "description": "The URL where this search can be accessed."
+          },
+          "next_page": {
+            "type": "string",
+            "nullable": true,
+            "description": "A cursor for the next page of results. Always `null` in Strimulator."
+          }
+        }
+      },
+      "Customer": {
+        "type": "object",
+        "description": "A customer object represents a customer of your business.",
+        "required": ["id", "object", "created", "livemode", "metadata"],
+        "properties": {
+          "id": { "type": "string", "description": "Unique identifier for the object (e.g., `cus_...`).", "example": "cus_abc123def456" },
+          "object": { "type": "string", "enum": ["customer"], "description": "String representing the object's type." },
+          "address": { "type": "object", "nullable": true, "description": "The customer's address." },
+          "balance": { "type": "integer", "description": "Current balance on the customer." },
+          "created": { "type": "integer", "description": "Time at which the object was created (Unix timestamp)." },
+          "currency": { "type": "string", "nullable": true, "description": "The currency the customer can be charged in." },
+          "default_source": { "type": "string", "nullable": true, "description": "ID of the default payment source." },
+          "delinquent": { "type": "boolean", "description": "Whether the customer currently has an unpaid invoice." },
+          "description": { "type": "string", "nullable": true, "description": "An arbitrary string attached to the object." },
+          "discount": { "type": "object", "nullable": true, "description": "Discount object currently applied to the customer." },
+          "email": { "type": "string", "nullable": true, "description": "The customer's email address." },
+          "invoice_prefix": { "type": "string", "description": "The prefix for the customer used to generate unique invoice numbers." },
+          "invoice_settings": {
+            "type": "object",
+            "description": "Default invoice settings for the customer.",
+            "properties": {
+              "custom_fields": { "type": "array", "nullable": true, "items": {} },
+              "default_payment_method": { "type": "string", "nullable": true },
+              "footer": { "type": "string", "nullable": true },
+              "rendering_options": { "type": "object", "nullable": true }
+            }
+          },
+          "livemode": { "type": "boolean", "description": "Always `false` in Strimulator." },
+          "metadata": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Set of key-value pairs attached to the object." },
+          "name": { "type": "string", "nullable": true, "description": "The customer's full name or business name." },
+          "phone": { "type": "string", "nullable": true, "description": "The customer's phone number." },
+          "preferred_locales": { "type": "array", "items": { "type": "string" }, "description": "Customer's preferred locales." },
+          "shipping": { "type": "object", "nullable": true, "description": "Shipping information for the customer." },
+          "tax_exempt": { "type": "string", "enum": ["none", "exempt", "reverse"], "description": "Tax exemption status." },
+          "test_clock": { "type": "string", "nullable": true, "description": "ID of the test clock this customer belongs to." }
+        }
+      },
+      "Product": {
+        "type": "object",
+        "description": "A product represents an item or service you sell.",
+        "required": ["id", "object", "active", "created", "livemode", "metadata", "name"],
+        "properties": {
+          "id": { "type": "string", "description": "Unique identifier for the object (e.g., `prod_...`).", "example": "prod_abc123def456" },
+          "object": { "type": "string", "enum": ["product"], "description": "String representing the object's type." },
+          "active": { "type": "boolean", "description": "Whether the product is currently available for purchase." },
+          "created": { "type": "integer", "description": "Time at which the object was created (Unix timestamp)." },
+          "default_price": { "type": "string", "nullable": true, "description": "The ID of the default price for this product." },
+          "description": { "type": "string", "nullable": true, "description": "The product's description." },
+          "images": { "type": "array", "items": { "type": "string" }, "description": "A list of image URLs for this product." },
+          "livemode": { "type": "boolean", "description": "Always `false` in Strimulator." },
+          "metadata": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Set of key-value pairs attached to the object." },
+          "name": { "type": "string", "description": "The product's name, displayed to customers." },
+          "package_dimensions": { "type": "object", "nullable": true, "description": "Package dimensions for shipping." },
+          "shippable": { "type": "boolean", "nullable": true, "description": "Whether the product is shippable." },
+          "statement_descriptor": { "type": "string", "nullable": true, "description": "Descriptor shown on customer statements." },
+          "tax_code": { "type": "string", "nullable": true, "description": "A tax code ID." },
+          "type": { "type": "string", "enum": ["service", "good"], "description": "The type of the product. Always `service` in Strimulator." },
+          "unit_label": { "type": "string", "nullable": true, "description": "A label that represents units of this product." },
+          "updated": { "type": "integer", "description": "Time at which the object was last updated (Unix timestamp)." },
+          "url": { "type": "string", "nullable": true, "description": "A URL of the product." }
+        }
+      },
+      "Price": {
+        "type": "object",
+        "description": "A price defines the unit cost, currency, and billing cycle for a product.",
+        "required": ["id", "object", "active", "created", "currency", "livemode", "metadata", "product", "type"],
+        "properties": {
+          "id": { "type": "string", "description": "Unique identifier for the object (e.g., `price_...`).", "example": "price_abc123def456" },
+          "object": { "type": "string", "enum": ["price"], "description": "String representing the object's type." },
+          "active": { "type": "boolean", "description": "Whether the price is currently active." },
+          "billing_scheme": { "type": "string", "enum": ["per_unit", "tiered"], "description": "Describes how to compute the price per period." },
+          "created": { "type": "integer", "description": "Time at which the object was created (Unix timestamp)." },
+          "currency": { "type": "string", "description": "Three-letter ISO currency code, in lowercase." },
+          "custom_unit_amount": { "type": "object", "nullable": true, "description": "Custom unit amount settings." },
+          "livemode": { "type": "boolean", "description": "Always `false` in Strimulator." },
+          "lookup_key": { "type": "string", "nullable": true, "description": "A lookup key used to retrieve prices dynamically." },
+          "metadata": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Set of key-value pairs attached to the object." },
+          "nickname": { "type": "string", "nullable": true, "description": "A brief description of the price." },
+          "product": { "type": "string", "description": "The ID of the product this price is for." },
+          "recurring": {
+            "type": "object",
+            "nullable": true,
+            "description": "The recurring components of a price. Only present for recurring prices.",
+            "properties": {
+              "interval": { "type": "string", "enum": ["day", "week", "month", "year"], "description": "The billing interval." },
+              "interval_count": { "type": "integer", "description": "The number of intervals between billings." },
+              "usage_type": { "type": "string", "enum": ["licensed", "metered"], "description": "How the quantity per period is determined." },
+              "aggregate_usage": { "type": "string", "nullable": true },
+              "trial_period_days": { "type": "integer", "nullable": true },
+              "meter": { "type": "string", "nullable": true }
+            }
+          },
+          "tax_behavior": { "type": "string", "nullable": true, "enum": ["exclusive", "inclusive", "unspecified"], "description": "Tax behavior of the price." },
+          "tiers_mode": { "type": "string", "nullable": true, "description": "The tiers mode." },
+          "transform_quantity": { "type": "object", "nullable": true, "description": "Quantity transformation settings." },
+          "type": { "type": "string", "enum": ["one_time", "recurring"], "description": "Whether the price is one-time or recurring." },
+          "unit_amount": { "type": "integer", "nullable": true, "description": "The unit amount in cents." },
+          "unit_amount_decimal": { "type": "string", "nullable": true, "description": "The unit amount in cents as a decimal string." }
+        }
+      },
+      "PaymentMethod": {
+        "type": "object",
+        "description": "A payment method represents a customer's payment instrument (e.g., a credit card).",
+        "required": ["id", "object", "created", "livemode", "type"],
+        "properties": {
+          "id": { "type": "string", "description": "Unique identifier for the object (e.g., `pm_...`).", "example": "pm_abc123def456" },
+          "object": { "type": "string", "enum": ["payment_method"], "description": "String representing the object's type." },
+          "billing_details": {
+            "type": "object",
+            "description": "Billing information associated with the payment method.",
+            "properties": {
+              "address": { "type": "object", "nullable": true },
+              "email": { "type": "string", "nullable": true },
+              "name": { "type": "string", "nullable": true },
+              "phone": { "type": "string", "nullable": true }
+            }
+          },
+          "card": {
+            "type": "object",
+            "description": "Card details (present when type is `card`).",
+            "properties": {
+              "brand": { "type": "string", "description": "Card brand (e.g., `visa`, `mastercard`, `amex`)." },
+              "checks": {
+                "type": "object",
+                "properties": {
+                  "address_line1_check": { "type": "string", "nullable": true },
+                  "address_postal_code_check": { "type": "string", "nullable": true },
+                  "cvc_check": { "type": "string", "nullable": true }
+                }
+              },
+              "country": { "type": "string", "description": "Two-letter ISO code for the card's issuing country." },
+              "display_brand": { "type": "string", "description": "The display brand of the card." },
+              "exp_month": { "type": "integer", "description": "Two-digit number representing the card's expiration month." },
+              "exp_year": { "type": "integer", "description": "Four-digit number representing the card's expiration year." },
+              "fingerprint": { "type": "string", "description": "Uniquely identifies this particular card number." },
+              "funding": { "type": "string", "enum": ["credit", "debit", "prepaid", "unknown"], "description": "Card funding type." },
+              "generated_from": { "type": "object", "nullable": true },
+              "last4": { "type": "string", "description": "The last four digits of the card." },
+              "networks": {
+                "type": "object",
+                "properties": {
+                  "available": { "type": "array", "items": { "type": "string" } },
+                  "preferred": { "type": "string", "nullable": true }
+                }
+              },
+              "three_d_secure_usage": {
+                "type": "object",
+                "properties": {
+                  "supported": { "type": "boolean" }
+                }
+              },
+              "wallet": { "type": "object", "nullable": true }
+            }
+          },
+          "created": { "type": "integer", "description": "Time at which the object was created (Unix timestamp)." },
+          "customer": { "type": "string", "nullable": true, "description": "The ID of the customer to which this payment method is attached, or `null`." },
+          "livemode": { "type": "boolean", "description": "Always `false` in Strimulator." },
+          "metadata": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Set of key-value pairs attached to the object." },
+          "type": { "type": "string", "enum": ["card"], "description": "The type of the payment method. Only `card` is supported." }
+        }
+      },
+      "PaymentIntent": {
+        "type": "object",
+        "description": "A PaymentIntent guides you through the process of collecting a payment from your customer.",
+        "required": ["id", "object", "amount", "currency", "created", "livemode", "metadata", "status"],
+        "properties": {
+          "id": { "type": "string", "description": "Unique identifier for the object (e.g., `pi_...`).", "example": "pi_abc123def456" },
+          "object": { "type": "string", "enum": ["payment_intent"], "description": "String representing the object's type." },
+          "amount": { "type": "integer", "description": "Amount intended to be collected, in cents." },
+          "amount_capturable": { "type": "integer", "description": "Amount that can be captured from this PaymentIntent." },
+          "amount_received": { "type": "integer", "description": "Amount that was collected." },
+          "automatic_payment_methods": { "type": "object", "nullable": true },
+          "canceled_at": { "type": "integer", "nullable": true, "description": "Time at which the PaymentIntent was canceled (Unix timestamp)." },
+          "cancellation_reason": { "type": "string", "nullable": true, "description": "Reason for cancellation." },
+          "capture_method": { "type": "string", "enum": ["automatic", "manual"], "description": "Controls when the funds will be captured." },
+          "client_secret": { "type": "string", "description": "The client secret for this PaymentIntent, used in client-side integrations." },
+          "confirmation_method": { "type": "string", "enum": ["automatic", "manual"], "description": "How the PaymentIntent was confirmed." },
+          "created": { "type": "integer", "description": "Time at which the object was created (Unix timestamp)." },
+          "currency": { "type": "string", "description": "Three-letter ISO currency code, in lowercase." },
+          "customer": { "type": "string", "nullable": true, "description": "ID of the customer this PaymentIntent is for." },
+          "description": { "type": "string", "nullable": true, "description": "An arbitrary string attached to the object." },
+          "last_payment_error": {
+            "type": "object",
+            "nullable": true,
+            "description": "The payment error encountered in the previous payment attempt.",
+            "properties": {
+              "type": { "type": "string" },
+              "message": { "type": "string" },
+              "code": { "type": "string" },
+              "decline_code": { "type": "string" },
+              "charge": { "type": "string" }
+            }
+          },
+          "latest_charge": { "type": "string", "nullable": true, "description": "The ID of the most recent charge created by this PaymentIntent." },
+          "livemode": { "type": "boolean", "description": "Always `false` in Strimulator." },
+          "metadata": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Set of key-value pairs attached to the object." },
+          "next_action": {
+            "type": "object",
+            "nullable": true,
+            "description": "If present, this property tells you what actions you need to take for the customer to continue the payment (e.g., 3DS authentication)."
+          },
+          "on_behalf_of": { "type": "string", "nullable": true },
+          "payment_method": { "type": "string", "nullable": true, "description": "ID of the payment method used in this PaymentIntent." },
+          "payment_method_options": { "type": "object", "description": "Payment method-specific configuration." },
+          "payment_method_types": { "type": "array", "items": { "type": "string" }, "description": "The list of payment method types that this PaymentIntent can use." },
+          "processing": { "type": "object", "nullable": true },
+          "receipt_email": { "type": "string", "nullable": true },
+          "setup_future_usage": { "type": "string", "nullable": true },
+          "shipping": { "type": "object", "nullable": true },
+          "statement_descriptor": { "type": "string", "nullable": true },
+          "statement_descriptor_suffix": { "type": "string", "nullable": true },
+          "status": {
+            "type": "string",
+            "enum": ["requires_payment_method", "requires_confirmation", "requires_action", "processing", "requires_capture", "canceled", "succeeded"],
+            "description": "Status of this PaymentIntent."
+          },
+          "transfer_data": { "type": "object", "nullable": true },
+          "transfer_group": { "type": "string", "nullable": true }
+        }
+      },
+      "SetupIntent": {
+        "type": "object",
+        "description": "A SetupIntent guides you through the process of setting up a customer's payment credentials for future payments.",
+        "required": ["id", "object", "created", "livemode", "metadata", "status"],
+        "properties": {
+          "id": { "type": "string", "description": "Unique identifier for the object (e.g., `seti_...`).", "example": "seti_abc123def456" },
+          "object": { "type": "string", "enum": ["setup_intent"], "description": "String representing the object's type." },
+          "application": { "type": "string", "nullable": true },
+          "automatic_payment_methods": { "type": "object", "nullable": true },
+          "cancellation_reason": { "type": "string", "nullable": true, "description": "Reason for cancellation." },
+          "client_secret": { "type": "string", "description": "The client secret for this SetupIntent." },
+          "created": { "type": "integer", "description": "Time at which the object was created (Unix timestamp)." },
+          "customer": { "type": "string", "nullable": true, "description": "ID of the customer this SetupIntent is for." },
+          "description": { "type": "string", "nullable": true },
+          "last_setup_error": { "type": "object", "nullable": true, "description": "The error encountered in the previous setup attempt." },
+          "latest_attempt": { "type": "string", "nullable": true },
+          "livemode": { "type": "boolean", "description": "Always `false` in Strimulator." },
+          "mandate": { "type": "string", "nullable": true },
+          "metadata": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Set of key-value pairs attached to the object." },
+          "next_action": { "type": "object", "nullable": true },
+          "on_behalf_of": { "type": "string", "nullable": true },
+          "payment_method": { "type": "string", "nullable": true, "description": "ID of the payment method attached to this SetupIntent." },
+          "payment_method_options": { "type": "object", "description": "Payment method-specific configuration." },
+          "payment_method_types": { "type": "array", "items": { "type": "string" }, "description": "The list of payment method types supported." },
+          "single_use_mandate": { "type": "string", "nullable": true },
+          "status": {
+            "type": "string",
+            "enum": ["requires_payment_method", "requires_confirmation", "requires_action", "canceled", "succeeded"],
+            "description": "Status of this SetupIntent."
+          },
+          "usage": { "type": "string", "enum": ["off_session", "on_session"], "description": "Indicates the future usage of this SetupIntent's payment method." }
+        }
+      },
+      "Charge": {
+        "type": "object",
+        "description": "A charge represents a payment of money. Charges are created automatically when a PaymentIntent succeeds.",
+        "required": ["id", "object", "amount", "created", "currency", "livemode", "metadata", "status"],
+        "properties": {
+          "id": { "type": "string", "description": "Unique identifier for the object (e.g., `ch_...`).", "example": "ch_abc123def456" },
+          "object": { "type": "string", "enum": ["charge"], "description": "String representing the object's type." },
+          "amount": { "type": "integer", "description": "Amount charged in cents." },
+          "amount_captured": { "type": "integer", "description": "Amount captured in cents." },
+          "amount_refunded": { "type": "integer", "description": "Amount refunded in cents." },
+          "balance_transaction": { "type": "string", "nullable": true },
+          "billing_details": {
+            "type": "object",
+            "description": "Billing information associated with the payment method.",
+            "properties": {
+              "address": { "type": "object", "nullable": true },
+              "email": { "type": "string", "nullable": true },
+              "name": { "type": "string", "nullable": true },
+              "phone": { "type": "string", "nullable": true }
+            }
+          },
+          "calculated_statement_descriptor": { "type": "string", "description": "The full statement descriptor." },
+          "captured": { "type": "boolean", "description": "Whether the charge has been captured." },
+          "created": { "type": "integer", "description": "Time at which the object was created (Unix timestamp)." },
+          "currency": { "type": "string", "description": "Three-letter ISO currency code." },
+          "customer": { "type": "string", "nullable": true, "description": "ID of the customer this charge is for." },
+          "description": { "type": "string", "nullable": true },
+          "disputed": { "type": "boolean", "description": "Whether the charge has been disputed." },
+          "failure_code": { "type": "string", "nullable": true, "description": "Error code explaining reason for charge failure." },
+          "failure_message": { "type": "string", "nullable": true, "description": "Message explaining charge failure." },
+          "invoice": { "type": "string", "nullable": true, "description": "ID of the invoice this charge is for." },
+          "livemode": { "type": "boolean", "description": "Always `false` in Strimulator." },
+          "metadata": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Set of key-value pairs attached to the object." },
+          "outcome": {
+            "type": "object",
+            "description": "Details about the charge outcome.",
+            "properties": {
+              "network_status": { "type": "string", "enum": ["approved_by_network", "declined_by_network"] },
+              "reason": { "type": "string", "nullable": true },
+              "risk_level": { "type": "string" },
+              "risk_score": { "type": "integer" },
+              "seller_message": { "type": "string" },
+              "type": { "type": "string", "enum": ["authorized", "issuer_declined"] }
+            }
+          },
+          "paid": { "type": "boolean", "description": "Whether the charge succeeded." },
+          "payment_intent": { "type": "string", "nullable": true, "description": "ID of the PaymentIntent that created this charge." },
+          "payment_method": { "type": "string", "nullable": true, "description": "ID of the payment method used." },
+          "refunded": { "type": "boolean", "description": "Whether the charge has been fully refunded." },
+          "refunds": {
+            "type": "object",
+            "description": "A list of refunds that have been applied to the charge.",
+            "properties": {
+              "object": { "type": "string", "enum": ["list"] },
+              "data": { "type": "array", "items": { "$ref": "#/components/schemas/Refund" } },
+              "has_more": { "type": "boolean" },
+              "url": { "type": "string" }
+            }
+          },
+          "status": { "type": "string", "enum": ["succeeded", "pending", "failed"], "description": "The status of the charge." }
+        }
+      },
+      "Refund": {
+        "type": "object",
+        "description": "A refund represents the return of funds to a customer.",
+        "required": ["id", "object", "amount", "created", "currency", "metadata", "status"],
+        "properties": {
+          "id": { "type": "string", "description": "Unique identifier for the object (e.g., `re_...`).", "example": "re_abc123def456" },
+          "object": { "type": "string", "enum": ["refund"], "description": "String representing the object's type." },
+          "amount": { "type": "integer", "description": "Amount refunded in cents." },
+          "balance_transaction": { "type": "string", "nullable": true },
+          "charge": { "type": "string", "description": "ID of the charge that was refunded." },
+          "created": { "type": "integer", "description": "Time at which the object was created (Unix timestamp)." },
+          "currency": { "type": "string", "description": "Three-letter ISO currency code." },
+          "metadata": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Set of key-value pairs attached to the object." },
+          "payment_intent": { "type": "string", "nullable": true, "description": "ID of the PaymentIntent that was refunded." },
+          "reason": { "type": "string", "nullable": true, "enum": ["duplicate", "fraudulent", "requested_by_customer", null], "description": "Reason for the refund." },
+          "receipt_number": { "type": "string", "nullable": true },
+          "source_transfer_reversal": { "type": "string", "nullable": true },
+          "status": { "type": "string", "enum": ["succeeded", "pending", "failed", "canceled"], "description": "Status of the refund." },
+          "transfer_reversal": { "type": "string", "nullable": true }
+        }
+      },
+      "Subscription": {
+        "type": "object",
+        "description": "A subscription allows you to charge a customer on a recurring basis.",
+        "required": ["id", "object", "created", "currency", "customer", "livemode", "metadata", "status"],
+        "properties": {
+          "id": { "type": "string", "description": "Unique identifier for the object (e.g., `sub_...`).", "example": "sub_abc123def456" },
+          "object": { "type": "string", "enum": ["subscription"], "description": "String representing the object's type." },
+          "billing_cycle_anchor": { "type": "integer", "description": "Determines the date of the first full invoice." },
+          "cancel_at": { "type": "integer", "nullable": true, "description": "Time at which the subscription will be automatically canceled (Unix timestamp)." },
+          "cancel_at_period_end": { "type": "boolean", "description": "Whether the subscription will be canceled at the end of the current period." },
+          "canceled_at": { "type": "integer", "nullable": true, "description": "Time at which the subscription was canceled (Unix timestamp)." },
+          "collection_method": { "type": "string", "enum": ["charge_automatically", "send_invoice"], "description": "How the subscription is collected." },
+          "created": { "type": "integer", "description": "Time at which the object was created (Unix timestamp)." },
+          "currency": { "type": "string", "description": "Three-letter ISO currency code." },
+          "current_period_end": { "type": "integer", "description": "End of the current period (Unix timestamp)." },
+          "current_period_start": { "type": "integer", "description": "Start of the current period (Unix timestamp)." },
+          "customer": { "type": "string", "description": "ID of the customer who owns the subscription." },
+          "default_payment_method": { "type": "string", "nullable": true, "description": "ID of the default payment method." },
+          "ended_at": { "type": "integer", "nullable": true, "description": "Time at which the subscription ended (Unix timestamp)." },
+          "items": {
+            "type": "object",
+            "description": "List of subscription items, each with an assigned price.",
+            "properties": {
+              "object": { "type": "string", "enum": ["list"] },
+              "data": {
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/SubscriptionItem" }
+              },
+              "has_more": { "type": "boolean" },
+              "url": { "type": "string" }
+            }
+          },
+          "latest_invoice": { "type": "string", "nullable": true, "description": "The most recent invoice this subscription has generated." },
+          "livemode": { "type": "boolean", "description": "Always `false` in Strimulator." },
+          "metadata": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Set of key-value pairs attached to the object." },
+          "status": {
+            "type": "string",
+            "enum": ["active", "past_due", "unpaid", "canceled", "incomplete", "incomplete_expired", "trialing", "paused"],
+            "description": "The status of the subscription."
+          },
+          "test_clock": { "type": "string", "nullable": true, "description": "ID of the test clock this subscription is associated with." },
+          "trial_end": { "type": "integer", "nullable": true, "description": "End of the trial period (Unix timestamp)." },
+          "trial_start": { "type": "integer", "nullable": true, "description": "Start of the trial period (Unix timestamp)." }
+        }
+      },
+      "SubscriptionItem": {
+        "type": "object",
+        "description": "A subscription item represents a single line item in a subscription.",
+        "required": ["id", "object", "created", "metadata", "price", "quantity", "subscription"],
+        "properties": {
+          "id": { "type": "string", "description": "Unique identifier for the object (e.g., `si_...`)." },
+          "object": { "type": "string", "enum": ["subscription_item"], "description": "String representing the object's type." },
+          "created": { "type": "integer", "description": "Time at which the object was created (Unix timestamp)." },
+          "metadata": { "type": "object", "additionalProperties": { "type": "string" } },
+          "price": { "$ref": "#/components/schemas/Price" },
+          "quantity": { "type": "integer", "description": "The quantity of the plan to which the customer is subscribed." },
+          "subscription": { "type": "string", "description": "The ID of the subscription this item belongs to." }
+        }
+      },
+      "Invoice": {
+        "type": "object",
+        "description": "An invoice is a statement of amounts owed by a customer.",
+        "required": ["id", "object", "amount_due", "amount_paid", "created", "currency", "customer", "livemode", "metadata", "status"],
+        "properties": {
+          "id": { "type": "string", "description": "Unique identifier for the object (e.g., `in_...`).", "example": "in_abc123def456" },
+          "object": { "type": "string", "enum": ["invoice"], "description": "String representing the object's type." },
+          "amount_due": { "type": "integer", "description": "Final amount due at this time for the invoice, in cents." },
+          "amount_paid": { "type": "integer", "description": "The amount that has been paid, in cents." },
+          "amount_remaining": { "type": "integer", "description": "The amount remaining to be paid, in cents." },
+          "attempt_count": { "type": "integer", "description": "Number of payment attempts made for this invoice." },
+          "attempted": { "type": "boolean", "description": "Whether an attempt has been made to pay the invoice." },
+          "auto_advance": { "type": "boolean", "description": "Controls whether Stripe performs automatic collection." },
+          "billing_reason": { "type": "string", "nullable": true, "description": "Indicates the reason why the invoice was created.", "enum": ["subscription_create", "subscription_cycle", "subscription_update", "manual", null] },
+          "collection_method": { "type": "string", "enum": ["charge_automatically", "send_invoice"], "description": "How the invoice is collected." },
+          "created": { "type": "integer", "description": "Time at which the object was created (Unix timestamp)." },
+          "currency": { "type": "string", "description": "Three-letter ISO currency code." },
+          "customer": { "type": "string", "description": "The ID of the customer who will be billed." },
+          "default_payment_method": { "type": "string", "nullable": true },
+          "description": { "type": "string", "nullable": true },
+          "effective_at": { "type": "integer", "nullable": true, "description": "Time at which the invoice was finalized (Unix timestamp)." },
+          "hosted_invoice_url": { "type": "string", "nullable": true },
+          "lines": {
+            "type": "object",
+            "description": "The individual line items that make up the invoice.",
+            "properties": {
+              "object": { "type": "string", "enum": ["list"] },
+              "data": { "type": "array", "items": {} },
+              "has_more": { "type": "boolean" },
+              "url": { "type": "string" }
+            }
+          },
+          "livemode": { "type": "boolean", "description": "Always `false` in Strimulator." },
+          "metadata": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Set of key-value pairs attached to the object." },
+          "number": { "type": "string", "nullable": true, "description": "The invoice number (assigned upon finalization)." },
+          "paid": { "type": "boolean", "description": "Whether the invoice has been paid." },
+          "payment_intent": { "type": "string", "nullable": true, "description": "The PaymentIntent associated with this invoice." },
+          "period_end": { "type": "integer", "description": "End of the usage period the invoice covers (Unix timestamp)." },
+          "period_start": { "type": "integer", "description": "Start of the usage period the invoice covers (Unix timestamp)." },
+          "status": {
+            "type": "string",
+            "enum": ["draft", "open", "paid", "uncollectible", "void"],
+            "description": "The status of the invoice."
+          },
+          "subscription": { "type": "string", "nullable": true, "description": "The subscription that this invoice was prepared for." },
+          "subtotal": { "type": "integer", "description": "Total of all subscriptions, invoice items, and prorations before discount or tax." },
+          "total": { "type": "integer", "description": "Total after discounts and taxes." }
+        }
+      },
+      "Event": {
+        "type": "object",
+        "description": "Events are Strimulator's way of letting you know when something interesting happens in your account.",
+        "required": ["id", "object", "api_version", "created", "data", "livemode", "pending_webhooks", "request", "type"],
+        "properties": {
+          "id": { "type": "string", "description": "Unique identifier for the object (e.g., `evt_...`).", "example": "evt_abc123def456" },
+          "object": { "type": "string", "enum": ["event"], "description": "String representing the object's type." },
+          "api_version": { "type": "string", "description": "The Stripe API version used to render `data`.", "example": "2024-12-18" },
+          "created": { "type": "integer", "description": "Time at which the object was created (Unix timestamp)." },
+          "data": {
+            "type": "object",
+            "description": "Data associated with the event.",
+            "required": ["object"],
+            "properties": {
+              "object": {
+                "type": "object",
+                "description": "The object that triggered the event."
+              },
+              "previous_attributes": {
+                "type": "object",
+                "description": "The values of attributes that have changed (only included for `*.updated` events)."
+              }
+            }
+          },
+          "livemode": { "type": "boolean", "description": "Always `false` in Strimulator." },
+          "pending_webhooks": { "type": "integer", "description": "Number of webhooks that have yet to be successfully delivered." },
+          "request": {
+            "type": "object",
+            "description": "Information on the API request that triggered the event.",
+            "properties": {
+              "id": { "type": "string", "nullable": true },
+              "idempotency_key": { "type": "string", "nullable": true }
+            }
+          },
+          "type": { "type": "string", "description": "Description of the event (e.g., `customer.created`, `payment_intent.succeeded`)." }
+        }
+      },
+      "WebhookEndpoint": {
+        "type": "object",
+        "description": "A webhook endpoint receives event notifications via HTTP POST.",
+        "required": ["id", "object", "created", "enabled_events", "livemode", "metadata", "status", "url"],
+        "properties": {
+          "id": { "type": "string", "description": "Unique identifier for the object (e.g., `we_...`).", "example": "we_abc123def456" },
+          "object": { "type": "string", "enum": ["webhook_endpoint"], "description": "String representing the object's type." },
+          "api_version": { "type": "string", "nullable": true, "description": "The API version events are rendered as." },
+          "application": { "type": "string", "nullable": true },
+          "created": { "type": "integer", "description": "Time at which the object was created (Unix timestamp)." },
+          "description": { "type": "string", "nullable": true, "description": "An optional description." },
+          "enabled_events": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "The list of events to enable for this endpoint. Use `[\"*\"]` for all events."
+          },
+          "livemode": { "type": "boolean", "description": "Always `false` in Strimulator." },
+          "metadata": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Set of key-value pairs attached to the object." },
+          "secret": { "type": "string", "description": "The endpoint's secret, used to generate webhook signatures. Only returned on creation." },
+          "status": { "type": "string", "enum": ["enabled", "disabled"], "description": "The status of the webhook endpoint." },
+          "url": { "type": "string", "description": "The URL of the webhook endpoint." }
+        }
+      },
+      "TestClock": {
+        "type": "object",
+        "description": "A test clock enables deterministic control over objects in testmode by simulating the passage of time.",
+        "required": ["id", "object", "created", "frozen_time", "livemode", "status"],
+        "properties": {
+          "id": { "type": "string", "description": "Unique identifier for the object (e.g., `clock_...`).", "example": "clock_abc123def456" },
+          "object": { "type": "string", "enum": ["test_helpers.test_clock"], "description": "String representing the object's type." },
+          "created": { "type": "integer", "description": "Time at which the object was created (Unix timestamp)." },
+          "deletes_after": { "type": "integer", "description": "Time at which this test clock will be automatically deleted (Unix timestamp)." },
+          "frozen_time": { "type": "integer", "description": "The frozen time for this test clock (Unix timestamp)." },
+          "livemode": { "type": "boolean", "description": "Always `false` in Strimulator." },
+          "name": { "type": "string", "nullable": true, "description": "A human-readable name for the test clock." },
+          "status": { "type": "string", "enum": ["ready", "advancing", "internal_failure"], "description": "The status of the test clock." }
+        }
+      }
+    }
+  }
+}
