@@ -3,15 +3,15 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "next build",
+    "build": "next build --turbopack",
     "start": "next start",
     "generate": "bun ./scripts/generate-docs.ts"
   },
   "dependencies": {
-    "fumadocs-core": "latest",
-    "fumadocs-mdx": "latest",
-    "fumadocs-openapi": "latest",
-    "fumadocs-ui": "latest",
+    "fumadocs-core": "^15.8.5",
+    "fumadocs-mdx": "^12.0.3",
+    "fumadocs-openapi": "^6.3.0",
+    "fumadocs-ui": "^15.8.5",
     "next": "^15",
     "react": "^19",
     "react-dom": "^19"

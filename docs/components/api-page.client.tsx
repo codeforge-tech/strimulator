@@ -1,4 +1,2 @@
 'use client';
-import { defineClientConfig } from 'fumadocs-openapi/ui/client';
-
-export default defineClientConfig({});
+export { Samples, Sample } from 'fumadocs-openapi/ui/client';

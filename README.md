@@ -4,6 +4,7 @@
 </p>
 
 <p align="center">
+  <a href="docs/">Documentation</a> &bull;
   <a href="#getting-started">Getting Started</a> &bull;
   <a href="#supported-resources">Resources</a> &bull;
   <a href="#sdk-usage">SDK Usage</a> &bull;
