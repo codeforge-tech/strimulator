@@ -1,0 +1,41 @@
+---
+title: Architecture Overview
+description: How Strimulator is built
+---
+
+Strimulator emulates Stripe's REST API over HTTP using Elysia (Bun's web framework) + SQLite via Drizzle ORM. It returns real `Stripe.*` types from the official `stripe` npm package.
+
+## Tech Stack
+
+| Component | Technology |
+|-----------|-----------|
+| Runtime | [Bun](https://bun.sh) |
+| Framework | [ElysiaJS](https://elysiajs.com) |
+| Database | SQLite via [Drizzle ORM](https://orm.drizzle.team) + bun:sqlite |
+| Types | Imported from [`stripe`](https://www.npmjs.com/package/stripe) npm package |
+| Dashboard | [Preact](https://preactjs.com) + [HTM](https://github.com/developit/htm) |
+| Testing | bun:test |
+
+## Project Structure
+
+```
+src/
+  routes/        # ElysiaJS route plugins (one per Stripe resource)
+  services/      # Business logic and state machines
+  db/schema/     # Drizzle ORM table definitions
+  middleware/    # Auth, idempotency, form parsing, request logging
+  dashboard/    # Debug dashboard (API + Preact SPA)
+  lib/          # Shared utilities (IDs, pagination, expand, search)
+  errors/       # Stripe-compatible error factory
+tests/
+  unit/         # Service-layer tests
+  integration/  # HTTP request/response tests
+  sdk/          # Tests using the official stripe npm package
+```
+
+## Key Design Decisions
+
+- **Stripe type fidelity:** Services return `Stripe.*` types directly from the official package, ensuring response shapes always match real Stripe.
+- **Synchronous DB:** bun:sqlite is synchronous, so services are synchronous. Routes are async only for body parsing and expansion.
+- **In-memory by default:** Using `:memory:` SQLite for ephemeral storage makes tests fast and isolated. File-backed persistence is opt-in.
+- **Single process:** No external dependencies — one binary, one port, everything included.

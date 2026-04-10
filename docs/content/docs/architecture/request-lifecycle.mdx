@@ -1,0 +1,65 @@
+---
+title: Request Lifecycle
+description: How an HTTP request flows through Strimulator
+---
+
+Every API request passes through a middleware chain before reaching the route handler:
+
+```
+HTTP request
+  → apiKeyAuth (validates Bearer sk_test_*)
+  → idempotencyMiddleware (caches POST responses by Idempotency-Key header)
+  → requestLogger (emits to globalBus for dashboard SSE)
+  → route handler
+    → parseStripeBody() (decodes x-www-form-urlencoded with bracket notation)
+    → service method (DB read/write, state validation)
+    → eventService.emit() (triggers webhook delivery)
+  → response
+```
+
+## Middleware
+
+### API Key Auth
+
+Validates the `Authorization: Bearer sk_test_*` header. Any key starting with `sk_test_` is accepted — Strimulator doesn't verify specific keys.
+
+Source: `src/middleware/api-key-auth.ts`
+
+### Idempotency
+
+Caches POST responses keyed by the `Idempotency-Key` header. Replay requests return the cached response without re-executing the handler.
+
+Source: `src/middleware/idempotency.ts`
+
+### Request Logger
+
+Emits every request to the global event bus for the dashboard's live activity feed via SSE.
+
+Source: `src/middleware/request-logger.ts`
+
+### Form Parser
+
+Decodes `application/x-www-form-urlencoded` bodies with Stripe's bracket notation (`metadata[key]=value`, `items[0][price]=...`).
+
+Source: `src/middleware/form-parser.ts`
+
+## Route → Service → Response
+
+Routes are Elysia plugin factories that:
+
+1. Parse the form-encoded body with `parseStripeBody()`
+2. Call the appropriate service method
+3. Emit events via `eventService.emit()` (triggers webhook delivery)
+4. Return the Stripe-typed response
+
+## Expansion
+
+Routes that support `?expand[]=field` use `applyExpand()` with a config mapping field names to resolver functions. Supports nested expansion via dot notation (`expand[]=latest_invoice.payment_intent`).
+
+Source: `src/lib/expand.ts`
+
+## Pagination
+
+All list endpoints use cursor-based pagination via `created` timestamp and `starting_after` parameter. Returns `{ object: "list", data: [...], has_more: boolean }`.
+
+Source: `src/lib/pagination.ts`
