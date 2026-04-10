@@ -243,8 +243,6 @@ export function dashboardApi(db: StrimulatorDB) {
         const deliveryService = new WebhookDeliveryService(db, endpointService);
 
         const event = eventService.retrieve(body.event_id);
-        // Verify endpoint exists
-        endpointService.retrieve(body.endpoint_id);
 
         const endpoint = endpointService.listAll().find((ep) => ep.id === body.endpoint_id);
         if (!endpoint) {
@@ -254,9 +252,13 @@ export function dashboardApi(db: StrimulatorDB) {
           });
         }
 
-        // Re-deliver
-        await deliveryService.deliver(event);
-        return { ok: true };
+        // Re-deliver to the specific endpoint
+        const deliveryId = await deliveryService.deliverToEndpoint(event, {
+          id: endpoint.id,
+          url: endpoint.url,
+          secret: endpoint.secret,
+        });
+        return { ok: true, delivery_id: deliveryId };
       } catch (err) {
         if (err instanceof StripeError) {
           return new Response(JSON.stringify(err.body), {
@@ -364,6 +366,271 @@ export function dashboardApi(db: StrimulatorDB) {
         });
 
         return { ok: true, subscription: updated, invoice };
+      } catch (err) {
+        if (err instanceof StripeError) {
+          return new Response(JSON.stringify(err.body), {
+            status: err.statusCode,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        throw err;
+      }
+    })
+
+    // --- Webhook management endpoints ---
+
+    .post("/webhooks", async ({ request }) => {
+      let body: { url?: string; enabled_events?: string[] } = {};
+      try {
+        const text = await request.text();
+        if (text) body = JSON.parse(text);
+      } catch {
+        return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (!body.url || !body.enabled_events?.length) {
+        return new Response(JSON.stringify({ error: "url and enabled_events are required" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      try {
+        const endpointService = new WebhookEndpointService(db);
+        const endpoint = endpointService.create({
+          url: body.url,
+          enabled_events: body.enabled_events,
+        });
+        return endpoint;
+      } catch (err) {
+        if (err instanceof StripeError) {
+          return new Response(JSON.stringify(err.body), {
+            status: err.statusCode,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        throw err;
+      }
+    })
+
+    .get("/deliveries", ({ query }) => {
+      const limit = Math.min(parseInt(String(query.limit ?? "20"), 10) || 20, 200);
+      const offset = parseInt(String(query.offset ?? "0"), 10) || 0;
+      const endpointId = query.endpoint_id as string | undefined;
+
+      try {
+        let countSql = "SELECT COUNT(*) as count FROM webhook_deliveries";
+        let dataSql = `SELECT
+          wd.id, wd.event_id, wd.endpoint_id, wd.status, wd.attempts, wd.next_retry_at, wd.created,
+          e.type as event_type,
+          we.url as endpoint_url
+        FROM webhook_deliveries wd
+        LEFT JOIN events e ON e.id = wd.event_id
+        LEFT JOIN webhook_endpoints we ON we.id = wd.endpoint_id`;
+
+        const queryParams: string[] = [];
+        if (endpointId) {
+          countSql += " WHERE endpoint_id = ?";
+          dataSql += " WHERE wd.endpoint_id = ?";
+          queryParams.push(endpointId);
+        }
+
+        dataSql += " ORDER BY wd.created DESC LIMIT ? OFFSET ?";
+
+        const totalRow = sqlite.query(countSql).get(...queryParams) as { count: number } | null;
+        const rows = sqlite.query(dataSql).all(...queryParams, limit, offset);
+
+        return {
+          data: rows,
+          total: totalRow?.count ?? 0,
+          limit,
+          offset,
+        };
+      } catch {
+        return new Response(JSON.stringify({ error: "Query failed" }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+    })
+
+    .get("/webhooks/:id/deliveries", ({ params, query }) => {
+      const limit = Math.min(parseInt(String(query.limit ?? "20"), 10) || 20, 200);
+      const offset = parseInt(String(query.offset ?? "0"), 10) || 0;
+
+      try {
+        const totalRow = sqlite.query(
+          "SELECT COUNT(*) as count FROM webhook_deliveries WHERE endpoint_id = ?"
+        ).get(params.id) as { count: number } | null;
+
+        const rows = sqlite.query(`SELECT
+          wd.id, wd.event_id, wd.endpoint_id, wd.status, wd.attempts, wd.next_retry_at, wd.created,
+          e.type as event_type,
+          we.url as endpoint_url
+        FROM webhook_deliveries wd
+        LEFT JOIN events e ON e.id = wd.event_id
+        LEFT JOIN webhook_endpoints we ON we.id = wd.endpoint_id
+        WHERE wd.endpoint_id = ?
+        ORDER BY wd.created DESC
+        LIMIT ? OFFSET ?`).all(params.id, limit, offset);
+
+        return {
+          data: rows,
+          total: totalRow?.count ?? 0,
+          limit,
+          offset,
+        };
+      } catch {
+        return new Response(JSON.stringify({ error: "Query failed" }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+    })
+
+    .patch("/webhooks/:id", async ({ params, request }) => {
+      let body: { url?: string; enabled_events?: string[]; status?: string } = {};
+      try {
+        const text = await request.text();
+        if (text) body = JSON.parse(text);
+      } catch {
+        return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      try {
+        const endpointService = new WebhookEndpointService(db);
+        return endpointService.update(params.id, body);
+      } catch (err) {
+        if (err instanceof StripeError) {
+          return new Response(JSON.stringify(err.body), {
+            status: err.statusCode,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        throw err;
+      }
+    })
+
+    .delete("/webhooks/:id", ({ params }) => {
+      try {
+        const endpointService = new WebhookEndpointService(db);
+        return endpointService.del(params.id);
+      } catch (err) {
+        if (err instanceof StripeError) {
+          return new Response(JSON.stringify(err.body), {
+            status: err.statusCode,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        throw err;
+      }
+    })
+
+    .post("/webhooks/:id/test", async ({ params, request }) => {
+      let body: { event_type?: string } = {};
+      try {
+        const text = await request.text();
+        if (text) body = JSON.parse(text);
+      } catch {
+        return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      const eventType = body.event_type;
+      if (!eventType) {
+        return new Response(JSON.stringify({ error: "event_type is required" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      try {
+        const endpointService = new WebhookEndpointService(db);
+        const deliveryService = new WebhookDeliveryService(db, endpointService);
+        const eventService = new EventService(db);
+
+        // Get endpoint details
+        const allEndpoints = endpointService.listAll();
+        const epData = allEndpoints.find((ep) => ep.id === params.id);
+        if (!epData) {
+          return new Response(JSON.stringify({ error: "Endpoint not found" }), {
+            status: 404,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+
+        // Build a minimal stub object for the event type
+        const [resource] = eventType.split(".");
+        const stubObject: Record<string, unknown> = {
+          id: `test_${resource}_${Date.now()}`,
+          object: resource,
+        };
+
+        // Emit the event (persists to DB)
+        const event = eventService.emit(eventType, stubObject);
+
+        // Deliver to the specific endpoint
+        const deliveryId = await deliveryService.deliverToEndpoint(event, {
+          id: epData.id,
+          url: epData.url,
+          secret: epData.secret,
+        });
+
+        return { ok: true, event_id: event.id, delivery_id: deliveryId };
+      } catch (err) {
+        if (err instanceof StripeError) {
+          return new Response(JSON.stringify(err.body), {
+            status: err.statusCode,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        throw err;
+      }
+    })
+
+    .post("/deliveries/:id/retry", async ({ params }) => {
+      try {
+        const delivery = sqlite.query(
+          "SELECT * FROM webhook_deliveries WHERE id = ?"
+        ).get(params.id) as { event_id: string; endpoint_id: string } | null;
+
+        if (!delivery) {
+          return new Response(JSON.stringify({ error: "Delivery not found" }), {
+            status: 404,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+
+        const eventService = new EventService(db);
+        const endpointService = new WebhookEndpointService(db);
+        const deliveryService = new WebhookDeliveryService(db, endpointService);
+
+        const event = eventService.retrieve(delivery.event_id);
+        const allEndpoints = endpointService.listAll();
+        const epData = allEndpoints.find((ep) => ep.id === delivery.endpoint_id);
+
+        if (!epData) {
+          return new Response(JSON.stringify({ error: "Endpoint no longer exists" }), {
+            status: 404,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+
+        const deliveryId = await deliveryService.deliverToEndpoint(event, {
+          id: epData.id,
+          url: epData.url,
+          secret: epData.secret,
+        });
+
+        return { ok: true, delivery_id: deliveryId };
       } catch (err) {
         if (err instanceof StripeError) {
           return new Response(JSON.stringify(err.body), {

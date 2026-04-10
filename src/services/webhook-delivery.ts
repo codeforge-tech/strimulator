@@ -37,25 +37,32 @@ export class WebhookDeliveryService {
     return `t=${timestamp},v1=${hmac}`;
   }
 
+  async deliverToEndpoint(
+    event: Stripe.Event,
+    endpoint: { id: string; url: string; secret: string },
+  ): Promise<string> {
+    const deliveryId = generateId("webhook_delivery");
+    const createdAt = now();
+
+    this.db.insert(webhookDeliveries).values({
+      id: deliveryId,
+      eventId: event.id,
+      endpointId: endpoint.id,
+      status: "pending",
+      attempts: 0,
+      nextRetryAt: null,
+      created: createdAt,
+    }).run();
+
+    this.attemptDelivery(deliveryId, endpoint, event, 0);
+    return deliveryId;
+  }
+
   async deliver(event: Stripe.Event): Promise<void> {
     const matchingEndpoints = this.findMatchingEndpoints(event.type);
 
     for (const endpoint of matchingEndpoints) {
-      const deliveryId = generateId("webhook_delivery");
-      const createdAt = now();
-
-      this.db.insert(webhookDeliveries).values({
-        id: deliveryId,
-        eventId: event.id,
-        endpointId: endpoint.id,
-        status: "pending",
-        attempts: 0,
-        nextRetryAt: null,
-        created: createdAt,
-      }).run();
-
-      // Attempt delivery asynchronously
-      this.attemptDelivery(deliveryId, endpoint, event, 0);
+      await this.deliverToEndpoint(event, endpoint);
     }
   }
 

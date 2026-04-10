@@ -147,4 +147,43 @@ describe("WebhookDeliveryService", () => {
       expect(matches[0].secret).toMatch(/^whsec_/);
     });
   });
+
+  describe("deliverToEndpoint", () => {
+    it("creates a delivery record for the specific endpoint", async () => {
+      const { db, endpointService, deliveryService } = makeServices();
+      const { getRawSqlite } = await import("../../../src/db");
+      const sqlite = getRawSqlite(db);
+
+      const endpoint = endpointService.create({
+        url: "https://example.com/webhook",
+        enabled_events: ["*"],
+      });
+
+      const event = {
+        id: "evt_test123",
+        object: "event" as const,
+        type: "customer.created",
+        data: { object: { id: "cus_123" } },
+        api_version: "2024-12-18",
+        created: 1700000000,
+        livemode: false,
+        pending_webhooks: 0,
+        request: { id: null, idempotency_key: null },
+      } as any;
+
+      const deliveryId = await deliveryService.deliverToEndpoint(event, {
+        id: endpoint.id,
+        url: endpoint.url,
+        secret: endpoint.secret!,
+      });
+
+      expect(deliveryId).toMatch(/^whdel_/);
+
+      // Verify delivery record was created
+      const row = sqlite.query("SELECT * FROM webhook_deliveries WHERE id = ?").get(deliveryId) as any;
+      expect(row).not.toBeNull();
+      expect(row.event_id).toBe("evt_test123");
+      expect(row.endpoint_id).toBe(endpoint.id);
+    });
+  });
 });
