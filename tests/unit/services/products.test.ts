@@ -888,19 +888,12 @@ describe("ProductService", () => {
 
       const lastId = page1.data[page1.data.length - 1].id;
       const page2 = svc.list(listParams({ limit: 2, startingAfter: lastId }));
-      // Pagination uses gt(created) so same-second inserts may not paginate fully
+      expect(page2.data.length).toBe(1);
       expect(page2.has_more).toBe(false);
-    });
 
-    it("paginating works correctly when timestamps differ", () => {
-      // The list implementation uses gt(created) for cursor pagination.
-      // When created within the same second, pagination may not advance.
-      // This test validates the pagination mechanism itself.
-      const svc = makeService();
-      svc.create({ name: "A" });
-
-      const page1 = svc.list(listParams({ limit: 1 }));
-      expect(page1.data.length).toBe(1);
+      // All items returned, no duplicates
+      const allIds = [...page1.data.map((d) => d.id), ...page2.data.map((d) => d.id)];
+      expect(new Set(allIds).size).toBe(3);
     });
 
     it("excludes deleted products", () => {

@@ -1306,10 +1306,7 @@ describe("PaymentMethodService", () => {
       ).toThrow(StripeError);
     });
 
-    it("pagination collects items without duplication across pages", () => {
-      // Since cursor pagination is based on unix-second timestamps, items created
-      // in the same second may all appear on the first page. We verify no duplicates
-      // appear across pages rather than asserting exact total count.
+    it("pagination collects all items without duplication across pages", () => {
       const svc = makeService();
       for (let i = 0; i < 5; i++) {
         svc.create({ type: "card" });
@@ -1325,10 +1322,9 @@ describe("PaymentMethodService", () => {
         startingAfter = result.data[result.data.length - 1].id;
       }
 
-      // No duplicate IDs across pages
-      expect(new Set(collectedIds).size).toBe(collectedIds.length);
-      // At least some items collected
-      expect(collectedIds.length).toBeGreaterThanOrEqual(2);
+      // All 5 items collected with no duplicates
+      expect(collectedIds.length).toBe(5);
+      expect(new Set(collectedIds).size).toBe(5);
     });
 
     it("list returns only PMs for the specified customer", () => {

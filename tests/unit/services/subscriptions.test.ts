@@ -2190,18 +2190,26 @@ describe("SubscriptionService", () => {
 
     // -- Pagination with startingAfter ------------------------------------
 
-    it("paginates with startingAfter (same-second limitation)", () => {
+    it("paginates with startingAfter", () => {
       const { subscriptionService, priceService } = makeServices();
       const price = createTestPrice(priceService);
 
-      // Note: when all subscriptions are created within the same second,
-      // cursor-based pagination using gt(created) won't return subsequent items.
-      // This tests the startingAfter mechanism resolves the cursor correctly.
-      const sub1 = createTestSubscription(subscriptionService, price.id, { customer: "cus_0" });
+      createTestSubscription(subscriptionService, price.id, { customer: "cus_0" });
+      createTestSubscription(subscriptionService, price.id, { customer: "cus_1" });
+      createTestSubscription(subscriptionService, price.id, { customer: "cus_2" });
 
-      const page1 = subscriptionService.list({ ...defaultListParams, limit: 1 });
-      expect(page1.data).toHaveLength(1);
-      expect(page1.data[0].id).toBe(sub1.id);
+      const page1 = subscriptionService.list({ ...defaultListParams, limit: 2 });
+      expect(page1.data).toHaveLength(2);
+      expect(page1.has_more).toBe(true);
+
+      const lastId = page1.data[page1.data.length - 1].id;
+      const page2 = subscriptionService.list({ ...defaultListParams, limit: 2, startingAfter: lastId });
+      expect(page2.data).toHaveLength(1);
+      expect(page2.has_more).toBe(false);
+
+      // All items returned, no duplicates
+      const allIds = [...page1.data.map((d) => d.id), ...page2.data.map((d) => d.id)];
+      expect(new Set(allIds).size).toBe(3);
     });
 
     it("startingAfter with non-existent id throws 404", () => {
@@ -2222,16 +2230,26 @@ describe("SubscriptionService", () => {
       }
     });
 
-    it("paginate through all subscriptions (single item per call)", () => {
+    it("paginate through all subscriptions one per page", () => {
       const { subscriptionService, priceService } = makeServices();
       const price = createTestPrice(priceService);
 
-      // Create a single subscription to test pagination mechanism
-      createTestSubscription(subscriptionService, price.id, { customer: "cus_0" });
+      for (let i = 0; i < 4; i++) {
+        createTestSubscription(subscriptionService, price.id, { customer: `cus_${i}` });
+      }
 
-      const result = subscriptionService.list({ ...defaultListParams, limit: 10 });
-      expect(result.data).toHaveLength(1);
-      expect(result.has_more).toBe(false);
+      const collectedIds: string[] = [];
+      let startingAfter: string | undefined = undefined;
+
+      for (let page = 0; page < 10; page++) {
+        const result = subscriptionService.list({ ...defaultListParams, limit: 1, startingAfter });
+        collectedIds.push(...result.data.map((d) => d.id));
+        if (!result.has_more) break;
+        startingAfter = result.data[result.data.length - 1].id;
+      }
+
+      expect(collectedIds.length).toBe(4);
+      expect(new Set(collectedIds).size).toBe(4);
     });
 
     // -- Each returned item is a valid subscription -----------------------

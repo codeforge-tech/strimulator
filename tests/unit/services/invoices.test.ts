@@ -1640,20 +1640,36 @@ describe("InvoiceService", () => {
 
       const page1 = service.list({ limit: 2, startingAfter: undefined, endingBefore: undefined });
       expect(page1.data.length).toBe(2);
+      expect(page1.has_more).toBe(true);
 
       const lastId = page1.data[page1.data.length - 1].id;
       const page2 = service.list({ limit: 2, startingAfter: lastId, endingBefore: undefined });
+      expect(page2.data.length).toBe(1);
       expect(page2.has_more).toBe(false);
+
+      // All items returned, no duplicates
+      const allIds = [...page1.data.map((d) => d.id), ...page2.data.map((d) => d.id)];
+      expect(new Set(allIds).size).toBe(3);
     });
 
     it("pagination collects items across pages", () => {
       const { service } = makeService();
-      // Create a single invoice and verify pagination works for single-page case
-      service.create({ customer: "cus_test", amount_due: 1000 });
+      for (let i = 0; i < 5; i++) {
+        service.create({ customer: "cus_test", amount_due: 1000 });
+      }
 
-      const page1 = service.list({ limit: 10, startingAfter: undefined, endingBefore: undefined });
-      expect(page1.data.length).toBe(1);
-      expect(page1.has_more).toBe(false);
+      const collectedIds: string[] = [];
+      let startingAfter: string | undefined = undefined;
+
+      for (let page = 0; page < 10; page++) {
+        const result = service.list({ limit: 2, startingAfter, endingBefore: undefined });
+        collectedIds.push(...result.data.map((d) => d.id));
+        if (!result.has_more) break;
+        startingAfter = result.data[result.data.length - 1].id;
+      }
+
+      expect(collectedIds.length).toBe(5);
+      expect(new Set(collectedIds).size).toBe(5);
     });
 
     it("throws 404 when startingAfter references nonexistent invoice", () => {

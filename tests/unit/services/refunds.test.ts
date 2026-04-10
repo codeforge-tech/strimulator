@@ -1219,43 +1219,46 @@ describe("RefundService", () => {
         ...defaultListParams,
         startingAfter: r1.id,
       });
-      // Items created in same second share timestamp, so gt won't return them.
-      // But the cursor item itself is excluded.
       expect(page.data.every((r) => r.id !== r1.id)).toBe(true);
     });
 
-    it("starting_after with item having unique timestamp paginates correctly", async () => {
+    it("starting_after paginates to next item", () => {
       const s = makeServices();
       const { chargeId: c1 } = createTestCharge(s);
       const r1 = s.refundService.create({ charge: c1 });
 
-      // Wait for the next second so the next refund gets a different timestamp
-      await new Promise((resolve) => setTimeout(resolve, 1100));
-
       const { chargeId: c2 } = createTestCharge(s);
       const r2 = s.refundService.create({ charge: c2 });
 
-      const page = s.refundService.list({
+      const page1 = s.refundService.list({ ...defaultListParams, limit: 1 });
+      expect(page1.data.length).toBe(1);
+      expect(page1.has_more).toBe(true);
+
+      const page2 = s.refundService.list({
         ...defaultListParams,
-        startingAfter: r1.id,
+        limit: 1,
+        startingAfter: page1.data[0].id,
       });
-      expect(page.data.length).toBe(1);
-      expect(page.data[0].id).toBe(r2.id);
+      expect(page2.data.length).toBe(1);
+      expect(page2.data[0].id).not.toBe(page1.data[0].id);
+      expect(page2.has_more).toBe(false);
     });
 
-    it("starting_after with last item returns empty when timestamps differ", async () => {
+    it("starting_after with last item returns empty", () => {
       const s = makeServices();
       const { chargeId: c1 } = createTestCharge(s);
       s.refundService.create({ charge: c1 });
 
-      await new Promise((resolve) => setTimeout(resolve, 1100));
-
       const { chargeId: c2 } = createTestCharge(s);
       const r2 = s.refundService.create({ charge: c2 });
 
+      // Get the last item (list is ordered by created desc, id desc)
+      const all = s.refundService.list(defaultListParams);
+      const lastItem = all.data[all.data.length - 1];
+
       const page = s.refundService.list({
         ...defaultListParams,
-        startingAfter: r2.id,
+        startingAfter: lastItem.id,
       });
       expect(page.data.length).toBe(0);
       expect(page.has_more).toBe(false);
@@ -1271,28 +1274,29 @@ describe("RefundService", () => {
       ).toThrow(StripeError);
     });
 
-    it("can paginate through items with starting_after when timestamps differ", async () => {
+    it("paginates through all items with starting_after", () => {
       const s = makeServices();
       const { chargeId: c1 } = createTestCharge(s);
-      const r1 = s.refundService.create({ charge: c1 });
-
-      await new Promise((resolve) => setTimeout(resolve, 1100));
+      s.refundService.create({ charge: c1 });
 
       const { chargeId: c2 } = createTestCharge(s);
-      const r2 = s.refundService.create({ charge: c2 });
+      s.refundService.create({ charge: c2 });
 
-      // Page 1
-      const page1 = s.refundService.list({ ...defaultListParams, limit: 1 });
-      expect(page1.data.length).toBe(1);
+      const { chargeId: c3 } = createTestCharge(s);
+      s.refundService.create({ charge: c3 });
 
-      // Page 2 using cursor
-      const page2 = s.refundService.list({
-        ...defaultListParams,
-        limit: 1,
-        startingAfter: page1.data[0].id,
-      });
-      expect(page2.data.length).toBe(1);
-      expect(page2.data[0].id).not.toBe(page1.data[0].id);
+      const collectedIds: string[] = [];
+      let startingAfter: string | undefined = undefined;
+
+      for (let page = 0; page < 10; page++) {
+        const result = s.refundService.list({ ...defaultListParams, limit: 1, startingAfter });
+        collectedIds.push(...result.data.map((d) => d.id));
+        if (!result.has_more) break;
+        startingAfter = result.data[result.data.length - 1].id;
+      }
+
+      expect(collectedIds.length).toBe(3);
+      expect(new Set(collectedIds).size).toBe(3);
     });
 
     // ----- chargeId filter -----

@@ -1,12 +1,9 @@
-import { describe, it, expect, beforeEach } from "bun:test";
-import { eq } from "drizzle-orm";
+import { describe, it, expect } from "bun:test";
 import { createDB } from "../../../src/db";
 import { PaymentMethodService } from "../../../src/services/payment-methods";
 import { CustomerService } from "../../../src/services/customers";
 import { SetupIntentService } from "../../../src/services/setup-intents";
 import { StripeError } from "../../../src/errors";
-import { setupIntents } from "../../../src/db/schema/setup-intents";
-import type { StrimulatorDB } from "../../../src/db";
 
 function makeServices() {
   const db = createDB(":memory:");
@@ -21,31 +18,6 @@ function createPM(pmService: PaymentMethodService, token = "tok_visa") {
 }
 
 const listDefaults = { limit: 10, startingAfter: undefined, endingBefore: undefined };
-
-/**
- * Creates N setup intents with distinct `created` timestamps so that
- * cursor-based pagination (which uses `gt(created, ...)`) works correctly.
- * Without this, all SIs created in the same second share a timestamp and
- * pagination returns empty pages.
- */
-function createSIsWithDistinctTimestamps(
-  db: StrimulatorDB,
-  siService: SetupIntentService,
-  count: number,
-  params: Parameters<SetupIntentService["create"]>[0] = {},
-) {
-  const ids: string[] = [];
-  for (let i = 0; i < count; i++) {
-    const si = siService.create(params);
-    // Patch the `created` column so each row has a unique ascending timestamp
-    db.update(setupIntents)
-      .set({ created: 1000 + i })
-      .where(eq(setupIntents.id, si.id))
-      .run();
-    ids.push(si.id);
-  }
-  return ids;
-}
 
 describe("SetupIntentService", () => {
   // ---------------------------------------------------------------------------
@@ -1219,20 +1191,26 @@ describe("SetupIntentService", () => {
     });
 
     it("paginates with startingAfter", () => {
-      const { db, siService } = makeServices();
-      createSIsWithDistinctTimestamps(db, siService, 3);
+      const { siService } = makeServices();
+      for (let i = 0; i < 3; i++) siService.create({});
 
       const page1 = siService.list({ ...listDefaults, limit: 2 });
       expect(page1.data.length).toBe(2);
+      expect(page1.has_more).toBe(true);
 
       const lastId = page1.data[page1.data.length - 1].id;
       const page2 = siService.list({ ...listDefaults, limit: 2, startingAfter: lastId });
-      expect(page2.data.length).toBeGreaterThanOrEqual(1);
+      expect(page2.data.length).toBe(1);
+      expect(page2.has_more).toBe(false);
+
+      // All items returned, no duplicates
+      const allIds = [...page1.data.map((d) => d.id), ...page2.data.map((d) => d.id)];
+      expect(new Set(allIds).size).toBe(3);
     });
 
     it("paginates through all items", () => {
-      const { db, siService } = makeServices();
-      createSIsWithDistinctTimestamps(db, siService, 5);
+      const { siService } = makeServices();
+      for (let i = 0; i < 5; i++) siService.create({});
 
       const page1 = siService.list({ ...listDefaults, limit: 2 });
       expect(page1.data.length).toBe(2);
@@ -1253,11 +1231,19 @@ describe("SetupIntentService", () => {
       });
       expect(page3.data.length).toBe(1);
       expect(page3.has_more).toBe(false);
+
+      // All 5 items returned, no duplicates
+      const allIds = [
+        ...page1.data.map((d) => d.id),
+        ...page2.data.map((d) => d.id),
+        ...page3.data.map((d) => d.id),
+      ];
+      expect(new Set(allIds).size).toBe(5);
     });
 
     it("each page returns different items", () => {
-      const { db, siService } = makeServices();
-      createSIsWithDistinctTimestamps(db, siService, 4);
+      const { siService } = makeServices();
+      for (let i = 0; i < 4; i++) siService.create({});
 
       const page1 = siService.list({ ...listDefaults, limit: 2 });
       const page2 = siService.list({

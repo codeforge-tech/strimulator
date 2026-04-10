@@ -1028,10 +1028,7 @@ describe("CustomerService", () => {
       expect(page2.has_more).toBe(false);
     });
 
-    it("starting_after with same-timestamp items may skip duplicates (timestamp-based cursor)", () => {
-      // Pagination uses gt(created, cursor.created). When items share the same
-      // second-level timestamp, starting_after skips to items with a strictly
-      // greater timestamp. This is expected behavior for this implementation.
+    it("starting_after paginates through all same-second items", () => {
       const svc = makeService();
       svc.create({ name: "A" });
       svc.create({ name: "B" });
@@ -1039,19 +1036,19 @@ describe("CustomerService", () => {
 
       const page1 = svc.list({ ...defaultParams, limit: 2 });
       expect(page1.data.length).toBe(2);
+      expect(page1.has_more).toBe(true);
 
-      // The cursor item's created timestamp is likely the same as all items,
-      // so page2 may return 0 items (gt means strictly greater).
       const cursor = page1.data[page1.data.length - 1].id;
       const page2 = svc.list({ ...defaultParams, startingAfter: cursor });
-      // Just verify the shape is correct; count depends on timestamp granularity
-      expect(page2.object).toBe("list");
-      expect(Array.isArray(page2.data)).toBe(true);
+      expect(page2.data.length).toBe(1);
+      expect(page2.has_more).toBe(false);
+
+      // All items returned, no duplicates
+      const allIds = [...page1.data.map((d) => d.id), ...page2.data.map((d) => d.id)];
+      expect(new Set(allIds).size).toBe(3);
     });
 
-    it("starting_after paginates correctly when cursor has unique timestamp", () => {
-      // Create a single customer, then verify starting_after with that
-      // customer returns an empty page (nothing created after it).
+    it("starting_after with last item returns empty page", () => {
       const svc = makeService();
       const c = svc.create({ name: "Only" });
       const page = svc.list({ ...defaultParams, startingAfter: c.id });

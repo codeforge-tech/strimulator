@@ -678,54 +678,10 @@ describe("ChargeService", () => {
       expect(result.has_more).toBe(false);
     });
 
-    it("paginates through items using starting_after with distinct timestamps", async () => {
-      const { chargeService, db } = makeService();
-      // Manually insert charges with distinct created timestamps so cursor pagination works
-      // (charges created in the same unix second share a timestamp, breaking gt-based cursors)
-      const { charges: chargesTable } = require("../../../src/db/schema/charges");
-
-      const ids = ["ch_page1", "ch_page2", "ch_page3"];
+    it("paginates through items using starting_after", () => {
+      const { chargeService } = makeService();
       for (let i = 0; i < 3; i++) {
-        const params = defaultParams({ paymentIntentId: `pi_p${i}` });
-        const charge = {
-          id: ids[i],
-          object: "charge" as const,
-          amount: params.amount,
-          amount_captured: params.amount,
-          amount_refunded: 0,
-          balance_transaction: null,
-          billing_details: { address: null, email: null, name: null, phone: null },
-          calculated_statement_descriptor: "STRIMULATOR",
-          captured: true,
-          created: 1000 + i,
-          currency: params.currency,
-          customer: null,
-          description: null,
-          disputed: false,
-          failure_code: null,
-          failure_message: null,
-          invoice: null,
-          livemode: false,
-          metadata: {},
-          outcome: { network_status: "approved_by_network", reason: null, risk_level: "normal", risk_score: 20, seller_message: "Payment complete.", type: "authorized" },
-          paid: true,
-          payment_intent: params.paymentIntentId,
-          payment_method: null,
-          refunded: false,
-          refunds: { object: "list", data: [], has_more: false, url: `/v1/charges/${ids[i]}/refunds` },
-          status: "succeeded",
-        };
-        db.insert(chargesTable).values({
-          id: ids[i],
-          customer_id: null,
-          payment_intent_id: params.paymentIntentId,
-          status: "succeeded",
-          amount: params.amount,
-          currency: params.currency,
-          refunded_amount: 0,
-          created: 1000 + i,
-          data: JSON.stringify(charge),
-        }).run();
+        chargeService.create(defaultParams({ paymentIntentId: `pi_p${i}` }));
       }
 
       const page1 = chargeService.list({ limit: 1, startingAfter: undefined, endingBefore: undefined });
@@ -911,32 +867,11 @@ describe("ChargeService", () => {
       expect(result.has_more).toBe(true);
     });
 
-    it("pagination with customer filter using distinct timestamps", () => {
-      const { chargeService, db } = makeService();
-      const { charges: chargesTable } = require("../../../src/db/schema/charges");
-
-      // Insert charges with distinct timestamps so cursor pagination works
-      const insertCharge = (id: string, customerId: string | null, piId: string, created: number) => {
-        const charge = {
-          id, object: "charge", amount: 1000, amount_captured: 1000, amount_refunded: 0,
-          balance_transaction: null, billing_details: { address: null, email: null, name: null, phone: null },
-          calculated_statement_descriptor: "STRIMULATOR", captured: true, created, currency: "usd",
-          customer: customerId, description: null, disputed: false, failure_code: null, failure_message: null,
-          invoice: null, livemode: false, metadata: {},
-          outcome: { network_status: "approved_by_network", reason: null, risk_level: "normal", risk_score: 20, seller_message: "Payment complete.", type: "authorized" },
-          paid: true, payment_intent: piId, payment_method: null, refunded: false,
-          refunds: { object: "list", data: [], has_more: false, url: `/v1/charges/${id}/refunds` },
-          status: "succeeded",
-        };
-        db.insert(chargesTable).values({
-          id, customer_id: customerId, payment_intent_id: piId, status: "succeeded",
-          amount: 1000, currency: "usd", refunded_amount: 0, created, data: JSON.stringify(charge),
-        }).run();
-      };
-
-      insertCharge("ch_pg1", "cus_pg", "pi_1", 1000);
-      insertCharge("ch_pg2", "cus_pg", "pi_2", 1001);
-      insertCharge("ch_pg3", "cus_other", "pi_3", 1002);
+    it("pagination with customer filter", () => {
+      const { chargeService } = makeService();
+      chargeService.create(defaultParams({ paymentIntentId: "pi_1", customerId: "cus_pg" }));
+      chargeService.create(defaultParams({ paymentIntentId: "pi_2", customerId: "cus_pg" }));
+      chargeService.create(defaultParams({ paymentIntentId: "pi_3", customerId: "cus_other" }));
 
       const page1 = chargeService.list({
         limit: 1,

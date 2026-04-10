@@ -1877,14 +1877,9 @@ describe("PaymentIntentService", () => {
 
     it("paginates with startingAfter", () => {
       const { piService } = makeServices();
-      // startingAfter uses gt(created) — all PIs created in same tick share a
-      // timestamp, so pagination only works across different timestamps.  We
-      // verify the mechanics: page2 should return items whose `created` is
-      // strictly greater than the cursor's `created`.  When all items share
-      // the same timestamp the second page is expected to be empty.
-      const pi1 = piService.create({ amount: 100, currency: "usd" });
-      const pi2 = piService.create({ amount: 200, currency: "usd" });
-      const pi3 = piService.create({ amount: 300, currency: "usd" });
+      piService.create({ amount: 100, currency: "usd" });
+      piService.create({ amount: 200, currency: "usd" });
+      piService.create({ amount: 300, currency: "usd" });
 
       const page1 = piService.list(listParams({ limit: 2 }));
       expect(page1.data.length).toBe(2);
@@ -1892,9 +1887,12 @@ describe("PaymentIntentService", () => {
 
       const lastId = page1.data[page1.data.length - 1].id;
       const page2 = piService.list(listParams({ limit: 10, startingAfter: lastId }));
-      // Items in the same second share `created` — so page2 may be empty
-      // or may contain items with strictly greater created. Either is valid.
-      expect(page2.data.length).toBeGreaterThanOrEqual(0);
+      expect(page2.data.length).toBe(1);
+      expect(page2.has_more).toBe(false);
+
+      // No duplicates across pages
+      const allIds = [...page1.data.map((d) => d.id), ...page2.data.map((d) => d.id)];
+      expect(new Set(allIds).size).toBe(3);
     });
 
     it("startingAfter with non-existent ID throws 404", () => {
@@ -1949,10 +1947,17 @@ describe("PaymentIntentService", () => {
       expect(page1.data.length).toBe(1);
       expect(page1.has_more).toBe(true);
 
-      // Pagination uses gt(created); items created in same tick share timestamp
-      // so page2 may be empty. Verify the call succeeds without error.
       const page2 = piService.list(listParams({ limit: 1, startingAfter: page1.data[0].id, customerId: "cus_y" }));
-      expect(page2.data.length).toBeGreaterThanOrEqual(0);
+      expect(page2.data.length).toBe(1);
+      expect(page2.has_more).toBe(true);
+
+      const page3 = piService.list(listParams({ limit: 1, startingAfter: page2.data[0].id, customerId: "cus_y" }));
+      expect(page3.data.length).toBe(1);
+      expect(page3.has_more).toBe(false);
+
+      // All items returned, no duplicates
+      const allIds = [page1.data[0].id, page2.data[0].id, page3.data[0].id];
+      expect(new Set(allIds).size).toBe(3);
     });
 
     it("list returns PIs in all statuses", () => {
