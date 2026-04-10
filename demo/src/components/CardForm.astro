@@ -1,0 +1,269 @@
+---
+interface Props {
+  amount: string;
+  productIndex: number;
+}
+
+const { amount, productIndex } = Astro.props;
+
+const testCards = [
+  { label: "Visa (success)", token: "tok_visa", number: "4242 4242 4242 4242", brand: "visa" },
+  { label: "Mastercard (success)", token: "tok_mastercard", number: "5555 5555 5555 4444", brand: "mastercard" },
+  { label: "Declined card", token: "tok_chargeDeclined", number: "4000 0000 0000 0002", brand: "visa" },
+  { label: "3DS Required", token: "tok_threeDSecureRequired", number: "4000 0000 0000 3220", brand: "visa" },
+];
+---
+
+<form id="payment-form">
+  <input type="hidden" name="productIndex" value={productIndex} />
+  <input type="hidden" name="token" id="token-input" value={testCards[0].token} />
+
+  <div class="field">
+    <label for="card-select">Test Card</label>
+    <select id="card-select" name="cardSelect">
+      {testCards.map((card) => (
+        <option value={card.token} data-number={card.number}>{card.label}</option>
+      ))}
+    </select>
+  </div>
+
+  <div class="field">
+    <label>Card Number</label>
+    <input type="text" id="card-number" value={testCards[0].number} readonly />
+  </div>
+
+  <div class="field-row">
+    <div class="field">
+      <label>Expiry</label>
+      <input type="text" value="12 / 34" readonly />
+    </div>
+    <div class="field">
+      <label>CVC</label>
+      <input type="text" value="123" readonly />
+    </div>
+  </div>
+
+  <button type="submit" id="pay-btn">
+    <span id="btn-text">Pay {amount}</span>
+    <span id="btn-spinner" class="hidden">Processing...</span>
+  </button>
+
+  <div id="error-message" class="hidden"></div>
+</form>
+
+<!-- 3DS modal -->
+<div id="three-ds-modal" class="modal-overlay hidden">
+  <div class="modal">
+    <h3>3D Secure Authentication</h3>
+    <p>Your bank requires additional verification for this payment.</p>
+    <button id="three-ds-authorize">Authorize Payment</button>
+  </div>
+</div>
+
+<style>
+  form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .field label {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #444;
+  }
+
+  .field input,
+  .field select {
+    padding: 0.7rem;
+    border: 1px solid #d0d0d8;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    background: white;
+    color: #1a1a2e;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+
+  .field input:focus,
+  .field select:focus {
+    outline: none;
+    border-color: #5469d4;
+    box-shadow: 0 0 0 3px rgba(84, 105, 212, 0.15);
+  }
+
+  .field input[readonly] {
+    background: #fafafa;
+    color: #666;
+  }
+
+  .field-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+
+  button[type="submit"] {
+    margin-top: 0.5rem;
+    padding: 0.85rem;
+    background: #5469d4;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  button[type="submit"]:hover {
+    background: #4257b2;
+  }
+
+  button[type="submit"]:disabled {
+    background: #9aa5ce;
+    cursor: not-allowed;
+  }
+
+  #error-message {
+    color: #df1b41;
+    font-size: 0.9rem;
+    padding: 0.75rem;
+    background: #fef2f4;
+    border-radius: 6px;
+  }
+
+  .hidden {
+    display: none;
+  }
+
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+
+  .modal {
+    background: white;
+    padding: 2rem;
+    border-radius: 12px;
+    max-width: 400px;
+    text-align: center;
+  }
+
+  .modal h3 {
+    margin-bottom: 0.75rem;
+  }
+
+  .modal p {
+    color: #555;
+    margin-bottom: 1.5rem;
+    font-size: 0.95rem;
+  }
+
+  .modal button {
+    padding: 0.75rem 2rem;
+    background: #5469d4;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .modal button:hover {
+    background: #4257b2;
+  }
+</style>
+
+<script>
+  const form = document.getElementById("payment-form") as HTMLFormElement;
+  const select = document.getElementById("card-select") as HTMLSelectElement;
+  const cardNumber = document.getElementById("card-number") as HTMLInputElement;
+  const tokenInput = document.getElementById("token-input") as HTMLInputElement;
+  const payBtn = document.getElementById("pay-btn") as HTMLButtonElement;
+  const btnText = document.getElementById("btn-text")!;
+  const btnSpinner = document.getElementById("btn-spinner")!;
+  const errorMessage = document.getElementById("error-message")!;
+  const modal = document.getElementById("three-ds-modal")!;
+  const authorizeBtn = document.getElementById("three-ds-authorize")!;
+
+  select.addEventListener("change", () => {
+    const option = select.selectedOptions[0];
+    cardNumber.value = option.dataset.number ?? "";
+    tokenInput.value = select.value;
+  });
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    errorMessage.classList.add("hidden");
+    payBtn.disabled = true;
+    btnText.classList.add("hidden");
+    btnSpinner.classList.remove("hidden");
+
+    const body = {
+      token: tokenInput.value,
+      productIndex: parseInt(new FormData(form).get("productIndex") as string, 10),
+    };
+
+    try {
+      const res = await fetch("/api/pay", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        window.location.href = `/success?payment_intent=${data.paymentIntentId}&amount=${data.amount}`;
+      } else if (data.requires_action) {
+        // Show 3DS modal
+        payBtn.disabled = false;
+        btnText.classList.remove("hidden");
+        btnSpinner.classList.add("hidden");
+        modal.classList.remove("hidden");
+
+        authorizeBtn.onclick = async () => {
+          authorizeBtn.textContent = "Authorizing...";
+          (authorizeBtn as HTMLButtonElement).disabled = true;
+          const confirmRes = await fetch("/api/confirm", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ paymentIntentId: data.paymentIntentId }),
+          });
+          const confirmData = await confirmRes.json();
+          if (confirmData.success) {
+            window.location.href = `/success?payment_intent=${confirmData.paymentIntentId}&amount=${confirmData.amount}`;
+          } else {
+            modal.classList.add("hidden");
+            errorMessage.textContent = confirmData.error || "3DS authorization failed.";
+            errorMessage.classList.remove("hidden");
+          }
+        };
+      } else {
+        errorMessage.textContent = data.error || "Payment failed.";
+        errorMessage.classList.remove("hidden");
+      }
+    } catch {
+      errorMessage.textContent = "Network error. Is Strimulator running?";
+      errorMessage.classList.remove("hidden");
+    } finally {
+      payBtn.disabled = false;
+      btnText.classList.remove("hidden");
+      btnSpinner.classList.add("hidden");
+    }
+  });
+</script>
