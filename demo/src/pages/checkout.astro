@@ -1,0 +1,99 @@
+---
+import Layout from "../layouts/Layout.astro";
+import CardForm from "../components/CardForm.astro";
+import { getProducts, formatPrice } from "../lib/products";
+
+const url = new URL(Astro.request.url);
+const productIndex = parseInt(url.searchParams.get("product") ?? "0", 10);
+const products = await getProducts();
+const product = products[productIndex];
+
+if (!product) {
+  return Astro.redirect("/");
+}
+---
+
+<Layout title="Checkout">
+  <a href="/" class="back-link">&larr; Back to products</a>
+  <h1>Checkout</h1>
+  <div class="checkout-grid">
+    <div class="order-summary">
+      <h2>Order Summary</h2>
+      <div class="line-item">
+        <span>{product.name}</span>
+        <span>{formatPrice(product.priceInCents)}</span>
+      </div>
+      <div class="total">
+        <span>Total</span>
+        <span>{formatPrice(product.priceInCents)}</span>
+      </div>
+    </div>
+    <div class="payment-section">
+      <h2>Payment</h2>
+      <CardForm amount={formatPrice(product.priceInCents)} productIndex={productIndex} />
+    </div>
+  </div>
+
+  <style>
+    .back-link {
+      display: inline-block;
+      margin-bottom: 1rem;
+      color: #5469d4;
+      text-decoration: none;
+      font-size: 0.9rem;
+    }
+
+    .back-link:hover {
+      text-decoration: underline;
+    }
+
+    h1 {
+      margin-bottom: 1.5rem;
+      font-size: 1.5rem;
+    }
+
+    .checkout-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2rem;
+    }
+
+    @media (max-width: 640px) {
+      .checkout-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .order-summary,
+    .payment-section {
+      background: white;
+      border-radius: 8px;
+      padding: 1.5rem;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+
+    h2 {
+      font-size: 1.1rem;
+      margin-bottom: 1.25rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid #eee;
+    }
+
+    .line-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.5rem 0;
+      font-size: 0.95rem;
+    }
+
+    .total {
+      display: flex;
+      justify-content: space-between;
+      padding-top: 0.75rem;
+      margin-top: 0.75rem;
+      border-top: 1px solid #eee;
+      font-weight: 600;
+      font-size: 1.05rem;
+    }
+  </style>
+</Layout>
