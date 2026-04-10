@@ -1,0 +1,71 @@
+---
+title: Connecting the Stripe SDK
+description: Use the official Stripe SDK with Strimulator
+---
+
+Point the official Stripe SDK at Strimulator — no code changes needed beyond the configuration.
+
+## Node.js / TypeScript
+
+```typescript
+import Stripe from "stripe";
+
+const stripe = new Stripe("sk_test_strimulator", {
+  host: "localhost",
+  port: 12111,
+  protocol: "http",
+});
+
+// Use exactly like real Stripe
+const customer = await stripe.customers.create({
+  email: "dev@example.com",
+});
+
+const product = await stripe.products.create({
+  name: "Pro Plan",
+});
+
+const price = await stripe.prices.create({
+  product: product.id,
+  unit_amount: 2000,
+  currency: "usd",
+  recurring: { interval: "month" },
+});
+
+const subscription = await stripe.subscriptions.create({
+  customer: customer.id,
+  items: [{ price: price.id }],
+});
+
+console.log(subscription.status); // "active"
+```
+
+## Environment Variable Approach
+
+If your app reads `STRIPE_SECRET_KEY`, you can switch to Strimulator without touching code:
+
+```bash
+STRIPE_SECRET_KEY=sk_test_strimulator \
+STRIPE_API_BASE=http://localhost:12111 \
+  npm run dev
+```
+
+## Docker Compose
+
+When using Docker Compose, point your app at the service name:
+
+```yaml
+services:
+  strimulator:
+    image: ghcr.io/codeforge-tech/strimulator:latest
+    ports:
+      - "12111:12111"
+
+  your-app:
+    build: .
+    environment:
+      STRIPE_SECRET_KEY: sk_test_strimulator
+      STRIPE_API_BASE: http://strimulator:12111
+    depends_on:
+      - strimulator
+```
