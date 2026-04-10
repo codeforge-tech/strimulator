@@ -1,0 +1,34 @@
+---
+title: Dashboard
+description: Real-time debug interface for monitoring and testing
+---
+
+Strimulator includes a built-in debug dashboard at http://localhost:12111/dashboard.
+
+## Activity Feed
+
+Live stream of all API requests showing method, path, status code, and timing. Uses Server-Sent Events (SSE) for real-time updates.
+
+## Resource Explorer
+
+Browse all stored objects by type. Click any object to view its full JSON representation.
+
+## Actions Panel
+
+Trigger simulated scenarios without writing code:
+
+| Action | Description |
+|--------|-------------|
+| **Fail Next Payment** | Force the next PaymentIntent confirmation to fail (`card_declined`, `insufficient_funds`, `expired_card`) |
+| **Advance Test Clock** | Move a test clock forward in time, triggering subscription transitions |
+| **Retry Webhook** | Re-deliver an event to a webhook endpoint |
+| **Expire Payment Intent** | Force a PaymentIntent into canceled state |
+| **Cycle Subscription** | Advance a subscription to the next billing period |
+
+## Webhooks Tab
+
+View registered webhook endpoints, delivery history, and retry failed deliveries.
+
+## Access
+
+The dashboard is not auth-protected — it's designed for local development use only.

@@ -1,0 +1,63 @@
+---
+title: Webhooks
+description: Register webhook endpoints and receive event notifications
+---
+
+Strimulator delivers webhook events just like Stripe — with HMAC-SHA256 signatures, retry logic, and the same event shapes.
+
+## Registering a Webhook Endpoint
+
+```bash
+curl -X POST http://localhost:12111/v1/webhook_endpoints \
+  -H "Authorization: Bearer sk_test_123" \
+  -d "url=http://localhost:3000/webhooks/stripe" \
+  -d "enabled_events[]=customer.created" \
+  -d "enabled_events[]=payment_intent.succeeded"
+```
+
+Or using the SDK:
+
+```typescript
+const endpoint = await stripe.webhookEndpoints.create({
+  url: "http://localhost:3000/webhooks/stripe",
+  enabled_events: [
+    "customer.created",
+    "payment_intent.succeeded",
+  ],
+});
+```
+
+Use `enabled_events: ["*"]` to receive all event types.
+
+## Signature Verification
+
+Strimulator signs webhook payloads with HMAC-SHA256, compatible with `stripe.webhooks.constructEvent()`:
+
+```typescript
+import Stripe from "stripe";
+
+const stripe = new Stripe("sk_test_strimulator", {
+  host: "localhost",
+  port: 12111,
+  protocol: "http",
+});
+
+// In your webhook handler
+const event = stripe.webhooks.constructEvent(
+  body,
+  request.headers["stripe-signature"],
+  endpoint.secret, // from the webhook endpoint's `secret` field
+);
+```
+
+## Retry Behavior
+
+When your endpoint returns a non-2xx status, Strimulator retries delivery. Failed deliveries and their status are visible in the dashboard.
+
+## Managing Webhooks from the Dashboard
+
+Open http://localhost:12111/dashboard and go to the **Webhooks** tab to:
+
+- View registered webhook endpoints
+- See delivery history and status
+- Retry failed deliveries

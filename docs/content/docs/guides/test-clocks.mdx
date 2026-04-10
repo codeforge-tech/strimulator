@@ -1,0 +1,52 @@
+---
+title: Test Clocks
+description: Simulate time advancement for subscription billing
+---
+
+Test clocks let you simulate the passage of time to test subscription lifecycle events — billing cycles, trial expirations, and period transitions.
+
+## Creating a Test Clock
+
+```typescript
+const clock = await stripe.testHelpers.testClocks.create({
+  frozen_time: Math.floor(Date.now() / 1000),
+  name: "Billing test",
+});
+```
+
+## Linking a Subscription to a Clock
+
+Create a customer with `test_clock`, then create subscriptions on that customer:
+
+```typescript
+const customer = await stripe.customers.create({
+  email: "test@example.com",
+  test_clock: clock.id,
+});
+
+const subscription = await stripe.subscriptions.create({
+  customer: customer.id,
+  items: [{ price: priceId }],
+});
+```
+
+## Advancing Time
+
+Move the clock forward to trigger billing events:
+
+```typescript
+await stripe.testHelpers.testClocks.advance(clock.id, {
+  frozen_time: clock.frozen_time + 30 * 24 * 60 * 60, // +30 days
+});
+```
+
+When advanced, Strimulator processes billing cycles for linked subscriptions:
+
+- Rolls subscription periods forward
+- Creates and finalizes invoices
+- Processes payments (creates charges)
+- Handles trial-to-active transitions
+
+## Dashboard
+
+You can also advance test clocks from the dashboard's **Actions** panel without writing code.

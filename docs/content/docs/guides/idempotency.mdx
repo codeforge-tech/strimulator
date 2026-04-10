@@ -1,0 +1,41 @@
+---
+title: Idempotency
+description: How Idempotency-Key works in Strimulator
+---
+
+Strimulator supports the `Idempotency-Key` header on POST requests, matching Stripe's behavior.
+
+## How It Works
+
+Send an `Idempotency-Key` header with any POST request. If the same key is sent again, Strimulator returns the cached response instead of creating a duplicate resource.
+
+```bash
+curl -X POST http://localhost:12111/v1/customers \
+  -H "Authorization: Bearer sk_test_123" \
+  -H "Idempotency-Key: unique-key-123" \
+  -d "email=test@example.com"
+
+# Same key → same response, no duplicate customer
+curl -X POST http://localhost:12111/v1/customers \
+  -H "Authorization: Bearer sk_test_123" \
+  -H "Idempotency-Key: unique-key-123" \
+  -d "email=test@example.com"
+```
+
+## SDK Usage
+
+The Stripe SDK automatically generates idempotency keys for most create operations. You can also specify one explicitly:
+
+```typescript
+const customer = await stripe.customers.create(
+  { email: "test@example.com" },
+  { idempotencyKey: "unique-key-123" },
+);
+```
+
+## Behavior
+
+- Keys are scoped to the API key and endpoint
+- Cached responses are returned with the same status code and body
+- Only POST requests support idempotency keys
+- Keys are stored in-memory (or SQLite depending on `STRIMULATOR_DB_PATH`)
