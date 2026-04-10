@@ -249,6 +249,8 @@ const testCards = [
             window.location.href = `/success?payment_intent=${confirmData.paymentIntentId}&amount=${confirmData.amount}`;
           } else {
             modal.classList.add("hidden");
+            authorizeBtn.textContent = "Authorize Payment";
+            (authorizeBtn as HTMLButtonElement).disabled = false;
             errorMessage.textContent = confirmData.error || "3DS authorization failed.";
             errorMessage.classList.remove("hidden");
           }
