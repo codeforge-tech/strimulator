@@ -175,4 +175,83 @@ describe("Dashboard Webhook API", () => {
       expect(res.status).toBe(404);
     });
   });
+
+  describe("Action: retry-webhook", () => {
+    test("retries delivery to the specified endpoint only", async () => {
+      const Stripe = (await import("stripe")).default;
+      const stripe = new Stripe("sk_test_strimulator", {
+        host: "localhost",
+        port: app.server!.port,
+        protocol: "http",
+      } as any);
+
+      // Create two endpoints
+      const ep1 = await stripe.webhookEndpoints.create({
+        url: "http://localhost:1/hook1",
+        enabled_events: ["customer.created"],
+      });
+      const ep2 = await stripe.webhookEndpoints.create({
+        url: "http://localhost:1/hook2",
+        enabled_events: ["customer.created"],
+      });
+
+      // Create a customer to generate an event
+      await stripe.customers.create({ email: "retry-action@example.com" });
+      await new Promise((r) => setTimeout(r, 500));
+
+      // Get the event
+      const events = await stripe.events.list({ type: "customer.created", limit: 1 });
+      const eventId = events.data[0].id;
+
+      // Count deliveries before retry
+      const beforeRes = await dashGet("/deliveries");
+      const beforeData = await beforeRes.json();
+      const beforeCount = beforeData.total;
+
+      // Retry to ep1 only
+      const retryRes = await dashPost("/actions/retry-webhook", {
+        event_id: eventId,
+        endpoint_id: ep1.id,
+      });
+      expect(retryRes.status).toBe(200);
+      const retryData = await retryRes.json();
+      expect(retryData.ok).toBe(true);
+      expect(retryData.delivery_id).toMatch(/^whdel_/);
+
+      // Should have created exactly 1 new delivery, not 2
+      await new Promise((r) => setTimeout(r, 200));
+      const afterRes = await dashGet("/deliveries");
+      const afterData = await afterRes.json();
+      expect(afterData.total).toBe(beforeCount + 1);
+    });
+
+    test("returns 400 for missing fields", async () => {
+      const res = await dashPost("/actions/retry-webhook", { event_id: "evt_123" });
+      expect(res.status).toBe(400);
+    });
+
+    test("returns 404 for nonexistent endpoint", async () => {
+      const Stripe = (await import("stripe")).default;
+      const stripe = new Stripe("sk_test_strimulator", {
+        host: "localhost",
+        port: app.server!.port,
+        protocol: "http",
+      } as any);
+
+      await stripe.webhookEndpoints.create({
+        url: "http://localhost:1/hook",
+        enabled_events: ["customer.created"],
+      });
+      await stripe.customers.create({ email: "retry-404@example.com" });
+      await new Promise((r) => setTimeout(r, 500));
+
+      const events = await stripe.events.list({ type: "customer.created", limit: 1 });
+
+      const res = await dashPost("/actions/retry-webhook", {
+        event_id: events.data[0].id,
+        endpoint_id: "we_nonexistent",
+      });
+      expect(res.status).toBe(404);
+    });
+  });
 });

@@ -243,8 +243,6 @@ export function dashboardApi(db: StrimulatorDB) {
         const deliveryService = new WebhookDeliveryService(db, endpointService);
 
         const event = eventService.retrieve(body.event_id);
-        // Verify endpoint exists
-        endpointService.retrieve(body.endpoint_id);
 
         const endpoint = endpointService.listAll().find((ep) => ep.id === body.endpoint_id);
         if (!endpoint) {
@@ -254,9 +252,13 @@ export function dashboardApi(db: StrimulatorDB) {
           });
         }
 
-        // Re-deliver
-        await deliveryService.deliver(event);
-        return { ok: true };
+        // Re-deliver to the specific endpoint
+        const deliveryId = await deliveryService.deliverToEndpoint(event, {
+          id: endpoint.id,
+          url: endpoint.url,
+          secret: endpoint.secret,
+        });
+        return { ok: true, delivery_id: deliveryId };
       } catch (err) {
         if (err instanceof StripeError) {
           return new Response(JSON.stringify(err.body), {
@@ -555,8 +557,7 @@ export function dashboardApi(db: StrimulatorDB) {
         const deliveryService = new WebhookDeliveryService(db, endpointService);
         const eventService = new EventService(db);
 
-        // Verify endpoint exists and get its details
-        endpointService.retrieve(params.id);
+        // Get endpoint details
         const allEndpoints = endpointService.listAll();
         const epData = allEndpoints.find((ep) => ep.id === params.id);
         if (!epData) {
